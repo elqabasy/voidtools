@@ -30,11 +30,11 @@ Description: Detect encoding type of a given string using Bash and iconv
 EOF
 
 # Copy source files into the package structure
-cp whatenc.sh "$INSTALL_PATH/whatenc"
-chmod 755 "$INSTALL_PATH/whatenc"
+cp src/copy/copy.sh "$INSTALL_PATH/copy"
+chmod 755 "$INSTALL_PATH/copy"
 
-# Copy man page and compress it
-gzip -c man/whatenc.1 > "$PKG_DIR/usr/share/man/man1/whatenc.1.gz"
+# # Copy man page and compress it
+# gzip -c man/copy.1 > "$PKG_DIR/usr/share/man/man1/copy.1.gz"
 
 # Build the package
 dpkg-deb --build "$PKG_DIR"
