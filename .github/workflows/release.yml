@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate repository structure
+        run: |
+          set -e
+          bash scripts/validate-structure.sh
+
+      - name: Run test suite
+        run: |
+          set -e
+          bash scripts/test-suite.sh
+
+      - name: Build .deb package
+        run: |
+          set -e
+          bash scripts/build-deb.sh
+
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: voidtools-deb
+          path: ./dist/voidtools.deb
+
+      - name: Create GitHub Release and Upload .deb
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: voidtools-v${{ github.run_id }}-${{ github.run_attempt }}
+          name: Release voidtools-v${{ github.run_id }}-${{ github.run_attempt }}
+          files: ./dist/voidtools.deb
+        env:
+          GITHUB_TOKEN:
