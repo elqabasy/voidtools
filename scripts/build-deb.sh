@@ -2,44 +2,40 @@
 
 set -e
 
-# VERSION="$(grep VERSION whatenc.sh | cut -d'"' -f2)"
-VERSION="1.0.0"  # Replace with the actual version if needed
+VERSION=$(git describe --tags --always || date +%s)
 
-PKG_NAME="whatenc"
-PKG_DIR="pkg-staging"
-DEB_DIR="${PKG_NAME}_${VERSION}_all"
-INSTALL_PATH="$PKG_DIR/usr/bin"
+PKG_NAME="voidtools"
+BUILD_DIR="pkg-staging"
+DIST_DIR="dist"
 
-# Clean any previous build
-rm -rf "$PKG_DIR"
+# Clean previous builds
+rm -rf "$BUILD_DIR" "$DIST_DIR"
+mkdir -p "$BUILD_DIR/DEBIAN"
+mkdir -p "$BUILD_DIR/usr/local/bin"
+mkdir -p "$DIST_DIR"
 
-# Create required folder structure
-mkdir -p "$INSTALL_PATH"
-mkdir -p "$PKG_DIR/DEBIAN"
-mkdir -p "$PKG_DIR/usr/share/man/man1"
+# Copy all tool scripts into the bin directory
+for tool_dir in tools/*; do
+    tool_script="$tool_dir/$(basename "$tool_dir").sh"
+    if [[ -f "$tool_script" ]]; then
+        cp "$tool_script" "$BUILD_DIR/usr/local/bin/$(basename "$tool_dir")"
+        chmod +x "$BUILD_DIR/usr/local/bin/$(basename "$tool_dir")"
+    fi
+done
 
-# Create control file dynamically
-cat <<EOF > "$PKG_DIR/DEBIAN/control"
+# Create control file
+cat <<EOF > "$BUILD_DIR/DEBIAN/control"
 Package: $PKG_NAME
 Version: $VERSION
 Section: utils
 Priority: optional
 Architecture: all
-Maintainer: Mahros <you@example.com>
-Description: Detect encoding type of a given string using Bash and iconv
+Maintainer: Mahros <your.email@example.com>
+Description: A toolkit for security and productivity utilities.
 EOF
 
-# Copy source files into the package structure
-cp src/copy/copy.sh "$INSTALL_PATH/copy"
-chmod 755 "$INSTALL_PATH/copy"
+# Build the .deb package
+dpkg-deb --build "$BUILD_DIR"
 
-# # Copy man page and compress it
-# gzip -c man/copy.1 > "$PKG_DIR/usr/share/man/man1/copy.1.gz"
-
-# Build the package
-dpkg-deb --build "$PKG_DIR"
-
-# Rename for clarity
-mv "${PKG_DIR}.deb" "${PKG_NAME}_${VERSION}_all.deb"
-
-echo "Package built: ${PKG_NAME}_${VERSION}_all.deb"
+# Move result to dist/
+mv "${BUILD_DIR}.deb" "$DIST_DIR/${PKG_NAME}.deb"
