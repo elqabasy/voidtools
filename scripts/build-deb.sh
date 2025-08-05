@@ -3,7 +3,7 @@
 set -e
 
 # VERSION="$(grep VERSION whatenc.sh | cut -d'"' -f2)"
-VERSION="v1.0.0"  # Replace with the actual version if needed
+VERSION="1.0.0"  # Replace with the actual version if needed
 
 PKG_NAME="whatenc"
 PKG_DIR="pkg-staging"
