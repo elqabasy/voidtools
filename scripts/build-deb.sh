@@ -1,26 +1,44 @@
 #!/bin/bash
+
 set -e
 
-PACKAGE_NAME="voidtools"
-BUILD_DIR="dist"
-DEBIAN_DIR="debian"
+VERSION=$(grep VERSION whatenc.sh | cut -d'"' -f2)
 
-mkdir -p "$BUILD_DIR"
+PKG_NAME="whatenc"
+PKG_DIR="pkg-staging"
+DEB_DIR="${PKG_NAME}_${VERSION}_all"
+INSTALL_PATH="$PKG_DIR/usr/bin"
 
-# Build directory structure for dpkg
-STAGING="pkg-staging"
-rm -rf "$STAGING"
-mkdir -p "$STAGING/usr/local/bin"
+# Clean any previous build
+rm -rf "$PKG_DIR"
 
-# Copy all tool binaries into bin
-for tool in tools/*; do
-  tool_name=$(basename "$tool")
-  cp "$tool/$tool_name.sh" "$STAGING/usr/local/bin/$tool_name"
-  chmod +x "$STAGING/usr/local/bin/$tool_name"
-done
+# Create required folder structure
+mkdir -p "$INSTALL_PATH"
+mkdir -p "$PKG_DIR/DEBIAN"
+mkdir -p "$PKG_DIR/usr/share/man/man1"
 
-# Copy debian metadata
-cp -r "$DEBIAN_DIR" "$STAGING/DEBIAN"
+# Create control file dynamically
+cat <<EOF > "$PKG_DIR/DEBIAN/control"
+Package: $PKG_NAME
+Version: $VERSION
+Section: utils
+Priority: optional
+Architecture: all
+Maintainer: Mahros <you@example.com>
+Description: Detect encoding type of a given string using Bash and iconv
+EOF
 
-# Build the .deb package
-dpkg-deb --build "$STAGING" "$BUILD_DIR/${PACKAGE_NAME}.deb"
+# Copy source files into the package structure
+cp whatenc.sh "$INSTALL_PATH/whatenc"
+chmod 755 "$INSTALL_PATH/whatenc"
+
+# Copy man page and compress it
+gzip -c man/whatenc.1 > "$PKG_DIR/usr/share/man/man1/whatenc.1.gz"
+
+# Build the package
+dpkg-deb --build "$PKG_DIR"
+
+# Rename for clarity
+mv "${PKG_DIR}.deb" "${PKG_NAME}_${VERSION}_all.deb"
+
+echo "Package built: ${PKG_NAME}_${VERSION}_all.deb"
