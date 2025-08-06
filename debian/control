@@ -1,0 +1,9 @@
+Package: voidtools
+Version: 1.0.0
+Section: utils
+Priority: optional
+Architecture: all
+Depends: bash, xclip
+Maintainer: Mahros Alqabasy <mahros.elqabasy@gmail.com>
+Description: CLI Toolkit for Kali Linux
+ A collection of CTF and utility command-line tools.

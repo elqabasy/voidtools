@@ -1,50 +1,37 @@
-name: Release
+name: Build and Release .deb Package
 
 on:
   push:
-    branches:
-      - main
-
-
-permissions:
-  contents: write
+    tags:
+      - 'v*'
 
 jobs:
-  build-and-release:
+  build:
     runs-on: ubuntu-latest
-    env:
-      DEBIAN_FRONTEND: noninteractive
+
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Validate repository structure
+      - name: Setup Dependencies
         run: |
-          set -e
-          bash scripts/validate-structure.sh
+          sudo apt update
+          sudo apt install -y dpkg-dev xclip fakeroot
 
-      - name: Run test suite
+      - name: Build .deb Package
         run: |
-          set -e
-          bash scripts/test-suite.sh
+          VERSION=$(cat VERSION)
+          mkdir -p build/usr/local/bin
+          cp tools/*/*.sh build/usr/local/bin/
+          chmod +x build/usr/local/bin/*
+          mkdir -p build/DEBIAN
+          cp debian/control build/DEBIAN/
+          cp debian/postinst build/DEBIAN/
+          dpkg-deb --build build voidtools_${VERSION}_all.deb
 
-      - name: Build .deb package
-        run: |
-          set -e
-          bash scripts/build-deb.sh
-
-      - name: Upload .deb artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: voidtools-deb
-          path: ./dist/voidtools.deb
-
-      - name: Create GitHub Release and Upload .deb
-        if: success()
+      - name: Upload Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: voidtools-v${{ github.run_id }}-${{ github.run_attempt }}
-          name: Release voidtools-v${{ github.run_id }}-${{ github.run_attempt }}
-          files: ./dist/voidtools.deb
+          files: voidtools_*.deb
         env:
-          GITHUB_TOKEN:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

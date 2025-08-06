@@ -1,0 +1,15 @@
+VERSION := $(shell cat VERSION)
+
+all: build
+
+build:
+	mkdir -p build/usr/local/bin
+	cp tools/*/*.sh build/usr/local/bin/
+	chmod +x build/usr/local/bin/*
+	mkdir -p build/DEBIAN
+	cp debian/control build/DEBIAN/
+	cp debian/postinst build/DEBIAN/
+	dpkg-deb --build build voidtools_$(VERSION)_all.deb
+
+clean:
+	rm -rf build *.deb
