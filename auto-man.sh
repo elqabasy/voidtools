@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Define the directory structure
-MAN_DIR="man/man1"
+MAN_DIR="docs/MANUAL"
 mkdir -p "$MAN_DIR"
 
 # Function to create and compress a man page
@@ -66,7 +66,7 @@ EOF
 
 create_man_page "copy" \
     "Copy input text to the clipboard using xsel." \
-    "$ echo \"picoCTF{example_flag}\" | copy\n(Copied to clipboard)"
+    "$ echo \"TEXT TO BE COPIED\" | copy\n(Copied to clipboard)"
 
 # Install man pages
 echo "📦 Installing man pages to /usr/share/man/man1/ (requires sudo)"

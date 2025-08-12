@@ -8,14 +8,16 @@ MANUAL_DIR="$DOCS_DIR/MANUAL"
 mkdir -p "$COMMANDS_DIR" "$MANUAL_DIR"
 
 # List of commands
-COMMANDS=("copy")
+COMMANDS=("voidtools" "copy")
 
 # Define descriptions for each command
 declare -A DESCRIPTIONS=(
     # ["picofind"]="Extract the first picoCTF flag from input and format it correctly."
     # ["picoformat"]="Format input by removing spaces and enforcing correct capitalization."
     # ["picoflag"]="Wrap input in the picoCTF flag format."
-    ["copy"]="Copy text to clipboard using xsel."
+    ["voidtools"]="A collection of tools for picoCTF challenges.",
+    ["copy"]="Copy input text to the clipboard using xsel."
+    
 )
 
 # Generate Markdown Docs for Each Command

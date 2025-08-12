@@ -68,6 +68,11 @@ jobs:
             #chmod +x "${file%.sh}"
           #done
 
+
+          # define voidtools directory for the bin
+          export PATH=$PATH:/usr/bin/voidtools
+          source ~/.bashrc
+
           # Copy man pages
           cp docs/MANUAL/*.1 pkg/usr/share/man/man1/
 
