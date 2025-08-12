@@ -1,0 +1,49 @@
+ .TH COPY 1 "August 2025" "voidtools" "User Commands"
+
+.SH NAME
+copy \- Copy text or file contents to the clipboard (voidtools subcommand)
+
+.SH SYNOPSIS
+.B voidtools copy
+[\fITEXT\fR | \fIFILE\fR]...
+
+.SH DESCRIPTION
+.B voidtools copy
+is a subcommand of the \fBvoidtools\fR suite (https://github.com/elqabasy/voidtools). It copies provided text, file contents, or piped input to the system clipboard using \fBxsel\fR. If a file is specified, its contents are copied. If a string is specified, the string itself is copied. Input can also be piped via stdin.
+
+Requires \fBxsel\fR to be installed.
+You can add more subcommands to \fBvoidtools\fR over time as needed.
+
+.SH OPTIONS
+No specific options. Provide one or more strings or file paths as arguments.
+
+.SH EXAMPLES
+Copy a string:
+.nf
+$ voidtools copy "some text"
+.fi
+
+Copy contents of a file:
+.nf
+$ voidtools copy flag.txt
+.fi
+
+Copy from stdin:
+.nf
+$ echo "some text" | voidtools copy
+.fi
+
+.SH OUTPUT
+On success: [+] Copied to clipboard!
+On empty input: [-] Empty output. Nothing copied!
+
+.SH SEE ALSO
+voidtools(1), xsel(1)
+For a full list of available subcommands, see the voidtools manual or visit the repository.
+
+.SH AUTHOR
+Written by Mahros AL-Qabasy.
+Email: mahros.elqabasy@gmail.com
+
+.SH BUGS
+Report issues at https://github.com/elqabasy/voidtools/issues
