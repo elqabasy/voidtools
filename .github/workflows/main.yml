@@ -29,7 +29,7 @@ jobs:
       - name: Prepare Package Structure
         run: |
           mkdir -p pkg/DEBIAN
-          mkdir -p pkg/usr/bin/voidtools
+          mkdir -p pkg/usr/bin
           mkdir -p pkg/usr/share/man/man1
 
           # Create DEBIAN/control file
@@ -44,27 +44,29 @@ jobs:
           Priority: optional
           EOF
 
-          # Prepare scripts/bin
+          # Copy scripts to /usr/bin/
           mkdir -p scripts/bin
 
-          # Generate the bin files
+          # generate the bin files
           for script in scripts/*.sh; do
             b_name=$(basename "$script")
             shc -f "$script" -o "scripts/bin/${b_name%.sh}" -r
           done
 
-          # Copy binaries to /usr/bin/voidtools/
+
+          # Add scripts to voidtools directory
+          mkdir pkg/usr/bin/voidtools/
+
+
+
+          # then copy them from scripts/bin to pkg/usr/bin
           cp scripts/bin/* pkg/usr/bin/voidtools/
 
-          # Create wrapper scripts in /usr/bin/
-          for bin in pkg/usr/bin/voidtools/*; do
-            w_name=$(basename "$bin")
-            cat <<EOW > pkg/usr/bin/$w_name
-#!/bin/sh
-exec /usr/bin/voidtools/$w_name "\$@"
-EOW
-            chmod +x pkg/usr/bin/$w_name
-          done
+          # Remove .sh extensions and make them executable
+          #for file in pkg/usr/bin/voidtools/*.sh; do
+            #mv "$file" "${file%.sh}"
+            #chmod +x "${file%.sh}"
+          #done
 
           # Copy man pages
           cp docs/MANUAL/*.1 pkg/usr/share/man/man1/
