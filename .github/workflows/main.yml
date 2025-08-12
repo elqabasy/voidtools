@@ -107,5 +107,3 @@ jobs:
           body: "🚀 New Debian package release: **v1.0.0**"
           draft: false
           prerelease: false
-          draft: false
-          prerelease: false
