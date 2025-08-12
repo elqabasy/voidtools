@@ -70,7 +70,7 @@ jobs:
 
 
           # define voidtools directory for the bin
-          export PATH=$PATH:/usr/bin/voidtools
+          export PATH="$PATH:/usr/bin/voidtools"
           source ~/.bashrc
 
           # Copy man pages
