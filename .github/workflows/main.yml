@@ -29,7 +29,7 @@ jobs:
       - name: Prepare Package Structure
         run: |
           mkdir -p pkg/DEBIAN
-          mkdir -p pkg/usr/bin
+          mkdir -p pkg/usr/bin/voidtools
           mkdir -p pkg/usr/share/man/man1
 
           # Create DEBIAN/control file
@@ -44,25 +44,27 @@ jobs:
           Priority: optional
           EOF
 
-          # Copy scripts to /usr/bin/
+          # Prepare scripts/bin
           mkdir -p scripts/bin
 
-          # generate the bin files
+          # Generate the bin files
           for script in scripts/*.sh; do
             b_name=$(basename "$script")
             shc -f "$script" -o "scripts/bin/${b_name%.sh}" -r
           done
 
-          # then copy them from scripts/bin to pkg/usr/bin
-          cp scripts/bin/* pkg/usr/bin/
+          # Copy binaries to /usr/bin/voidtools/
+          cp scripts/bin/* pkg/usr/bin/voidtools/
 
-
-
-          # Remove .sh extensions and make them executable
-          #for file in pkg/usr/bin/*.sh; do
-            #mv "$file" "${file%.sh}"
-            #chmod +x "${file%.sh}"
-          #done
+          # Create wrapper scripts in /usr/bin/
+          for bin in pkg/usr/bin/voidtools/*; do
+            w_name=$(basename "$bin")
+            cat <<EOW > pkg/usr/bin/$w_name
+#!/bin/sh
+exec /usr/bin/voidtools/$w_name "\$@"
+EOW
+            chmod +x pkg/usr/bin/$w_name
+          done
 
           # Copy man pages
           cp docs/MANUAL/*.1 pkg/usr/share/man/man1/
@@ -101,5 +103,7 @@ jobs:
           tag_name: v1.0.0
           release_name: "Release v1.0.0"
           body: "🚀 New Debian package release: **v1.0.0**"
+          draft: false
+          prerelease: false
           draft: false
           prerelease: false
