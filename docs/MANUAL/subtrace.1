@@ -1,0 +1,83 @@
+.\" Manpage for subtrace
+.TH SUBTRACE 1 "August 2025" "subtrace 1.0" "User Commands"
+.SH NAME
+subtrace \- passive subdomain tracer and enumerator
+.SH SYNOPSIS
+.B subtrace
+[\fIOPTIONS\fR] \-d \fIDOMAIN\fR
+.SH DESCRIPTION
+.B subtrace
+is a user-friendly Linux command-line tool for passive subdomain enumeration.
+It runs multiple reconnaissance tools in parallel (such as subfinder, assetfinder,
+amass, crt.sh, and waybackurls) and produces a clean list of unique subdomains.
+
+The tool is designed to be:
+.IP \(bu 2
+Scalable and extensible for future integrations
+.IP \(bu 2
+User-friendly with clear output and optional verbose progress
+.IP \(bu 2
+Passive-only by default to avoid generating traffic to the target
+.IP \(bu 2
+Deterministic: output is always a list of domains (one per line)
+.SH OPTIONS
+.TP
+.BR -d " DOMAIN"
+Target domain (required).
+.TP
+.BR -o " FILE"
+Output file. Defaults to \fIsubtrace_DOMAIN.txt\fR.
+.TP
+.BR -v
+Verbose mode. Shows progress updates, subdomains as they are discovered,
+and per-tool summaries.
+.TP
+.BR -h
+Display help and exit.
+.SH OUTPUT
+The result is always a plain text file containing one unique subdomain per line.
+Example:
+.nf
+api.example.com
+mail.example.com
+www.example.com
+.fi
+.SH EXAMPLES
+Run a passive scan on example.com and save results to the default file:
+.nf
+subtrace -d example.com
+.fi
+
+Run with verbose output:
+.nf
+subtrace -d example.com -v
+.fi
+
+Specify custom output file:
+.nf
+subtrace -d example.com -o results.txt
+.fi
+.SH DEPENDENCIES
+The following tools are used by
+.B subtrace
+if available:
+.IP \(bu 2
+subfinder
+.IP \(bu 2
+assetfinder
+.IP \(bu 2
+amass
+.IP \(bu 2
+crt.sh (via curl + jq)
+.IP \(bu 2
+waybackurls
+.PP
+Missing dependencies will be reported with installation hints.
+.SH AUTHOR
+Written by elqabasy.
+.SH REPORTING BUGS
+Report bugs at:
+.UR https://github.com/elqabasy/voidtools
+.UE
+.SH COPYRIGHT
+This is free software; you may redistribute it under the terms of the MIT License.
