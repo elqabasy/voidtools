@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # subtrace v1.4.0 — Passive & Active Subdomain Enumeration (Streaming output + per-tool stats)
 # License: MIT
 
