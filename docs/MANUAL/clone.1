@@ -1,0 +1,157 @@
+.\" Manpage for clone.sh
+.TH CLONE 1 "2025-08-26" "1.0" "Clone Tool Manual"
+.SH NAME
+clone \- Authorized site cloner and analyzer for lab use
+
+.SH SYNOPSIS
+.B clone.sh
+[\fIURL\fR] -o \fIOUTDIR\fR [OPTIONS]
+
+.SH DESCRIPTION
+.B clone
+is a professional site mirroring and discovery tool intended for
+authorized testing in controlled lab environments.  
+It supports stealthy crawling and downloading with randomized
+headers, User-Agents, and request timing to simulate human-like browsing behavior.  
+
+By default, stealth mode is enabled.  
+
+The tool builds a URL list via a spider phase and downloads content in parallel or sequentially.  
+It supports reporting, analysis, and multiple output formats.
+
+.SH USAGE
+The basic usage requires a target URL and an output directory:
+
+.RS
+$ ./clone.sh https://example.com -o clones
+.RE
+
+Advanced usage includes stealth configuration, UA rotation, parallel threads, and crawl depth:
+
+.RS
+$ ./clone.sh https://example.com -o clones --depth=3 --threads=5 --ua-list=my_uas.txt
+.RE
+
+.SH OPTIONS
+.TP
+.BR -o ", --output" \fIDIR\fR
+Output directory for mirrored content (created if missing). Required.
+
+.TP
+.BR --no-stealth
+Disable stealth mode. Requests will use default wget behavior.
+
+.TP
+.BR --ua-random
+Enable random built-in User-Agent rotation. Default: enabled.
+
+.TP
+.BR --ua-list= \fIFILE\fR
+Supply a custom list of User-Agent strings (one per line). Overrides built-in UA rotation.
+
+.TP
+.BR --depth= \fIN\fR
+Recursion depth for crawling/spidering. Default: 1.
+
+.TP
+.BR --threads= \fIN\fR
+Number of parallel downloads. Default: 1.
+
+.TP
+.BR --dry-run
+Perform a trial run without downloading any files. Useful to verify settings.
+
+.TP
+.BR -q ", --quiet"
+Suppress non-error output.
+
+.TP
+.BR -v ", --verbose"
+Enable detailed debug and information output.
+
+.TP
+.BR -h ", --help"
+Display this help message and exit.
+
+.SH STEALTH FEATURES
+By default, stealth mode includes:
+.IP
+- Random delays between requests (1–5 seconds).
+- Randomized User-Agent per request.
+- Randomized HTTP headers (Accept, Accept-Language, X-Requested-With).
+
+Use \fB--no-stealth\fR to disable these features for standard wget behavior.
+
+.SH OUTPUT & LOGGING
+All outputs are organized under the specified \fIOUTDIR\fR:
+
+.TP
+\fIOUTDIR/\fR
+Root output directory.
+
+.TP
+\fIOUTDIR/urls.txt\fR
+Collected URLs from spider phase.
+
+.TP
+\fIOUTDIR/wget_spider.log\fR
+Raw spider wget log.
+
+.TP
+\fIOUTDIR/wget_download.log\fR
+Raw download wget log.
+
+.TP
+\fIOUTDIR/report.json\fR
+JSON report containing metadata and URL list.
+
+Additional formats supported:
+.TP
+- TXT, CSV, SQLite (via flags in the script).
+
+.SH EXAMPLES
+Sequential download with stealth:
+
+.RS
+$ ./clone.sh http://example.com -o clones
+.RE
+
+Parallel download, depth=3, custom UA list:
+
+.RS
+$ ./clone.sh http://example.com -o clones --threads=5 --depth=3 --ua-list=my_uas.txt
+.RE
+
+Dry-run to verify configuration:
+
+.RS
+$ ./clone.sh http://example.com -o clones --dry-run
+.RE
+
+Disable stealth for normal wget behavior:
+
+.RS
+$ ./clone.sh http://example.com -o clones --no-stealth
+.RE
+
+.SH NOTES
+.B clone
+respects robots.txt by default. Ignoring robots must be deliberate and is not recommended outside lab environments.
+
+Use this tool only in authorized and controlled environments. It is not intended for use on production websites without explicit permission.
+
+.SH ENVIRONMENT
+No environment variables are required. Optional:
+.TP
+STEALTH
+Global variable controlling stealth behavior (true/false).
+
+.TP
+UA_LIST
+Array of custom User-Agent strings (overrides built-in list if provided).
+
+.SH AUTHOR
+Developed by your lab team for educational and controlled penetration testing exercises.
+
+.SH SEE ALSO
+.BR wget (1)

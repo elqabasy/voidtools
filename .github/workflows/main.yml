@@ -2,7 +2,7 @@ name: Build and Release .deb Package
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -72,6 +72,7 @@ jobs:
           # define voidtools directory for the bin
           export PATH="$PATH:/usr/bin/voidtools"
           source ~/.bashrc
+          # source ~/.zshrc
 
           # Copy man pages
           cp docs/MANUAL/*.1 pkg/usr/share/man/man1/
