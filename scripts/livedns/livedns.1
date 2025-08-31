@@ -1,1 +1,85 @@
-no correct
+.TH LIVEDNS 1 "August 2025" "livedns 1.0" "User Commands"
+.SH NAME
+livedns \- passive and active domain checker using DNS lookups
+.SH SYNOPSIS
+.B livedns
+[\fIoptions\fR]
+.SH DESCRIPTION
+.B livedns
+is a Bash-based utility that performs DNS lookups for a list of domains.  
+It supports parallel resolution and can write results to a file.
+
+It is intended for quickly checking if domains resolve, useful for reconnaissance, monitoring, or scripting in security and network administration.
+
+.SH OPTIONS
+.TP
+.BR -h ", " --help
+Show usage information and exit.
+.TP
+.BR -d " " \fIFILE\fR ", " --domains=\fIFILE\fR
+Path to a file containing a list of domains (one per line).  
+This option is required.
+.TP
+.BR -o " " \fIFILE\fR ", " --output=\fIFILE\fR
+Path to the output file where results will be written.  
+If omitted, results are printed to standard output.
+.TP
+.BR -p " " \fIN\fR ", " --parallelism=\fIN\fR
+Number of parallel processes to use for DNS resolution.  
+Defaults to \fB1\fR.
+
+.SH EXAMPLES
+Resolve domains listed in
+.I domains.txt
+with default settings:
+.PP
+.EX
+$ livedns -d domains.txt
+.EE
+.PP
+Resolve domains and save results to
+.I results.txt
+with 5 parallel lookups:
+.PP
+.EX
+$ livedns -d domains.txt -o results.txt -p 5
+.EE
+
+.SH OUTPUT
+Each successfully resolving domain is printed (or saved) in the format:
+.PP
+.EX
+example.com
+anotherdomain.org
+.EE
+
+Domains that do not resolve are silently skipped.
+
+.SH EXIT STATUS
+.TP
+.B 0
+Successful execution.
+.TP
+.B 1
+Invalid usage or missing required arguments.
+.TP
+.B >0
+Other errors (e.g., failures in DNS resolution).
+
+.SH DEPENDENCIES
+The following tools must be available in the system \fBPATH\fR:
+.TP
+.B dig
+DNS lookup utility (commonly provided by \fBbind-utils\fR or \fBdnsutils\fR).
+
+.SH AUTHOR
+Written by Mahros AL-Qabasy <mahros.elqabasy@gmail.com>
+
+.SH PROJECT
+Source code and updates available at:
+.UR https://github.com/elqabasy/voidtools
+.UE
+
+.SH SEE ALSO
+.BR dig (1),
+.BR xargs (1)

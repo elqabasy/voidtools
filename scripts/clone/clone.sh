@@ -1,8 +1,4 @@
 #!/bin/bash
-# ====================================================================
-# Site Cloner & Discovery Tool - Authorized Pen-Testing Use Only
-# Author: Red Team Learner
-# ====================================================================
 
 # =====================[ CONFIGURATION ]=============================
 VERSION="1.0"

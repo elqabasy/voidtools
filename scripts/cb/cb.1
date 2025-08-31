@@ -1,0 +1,123 @@
+.TH CB 1 "August 2025" "cb 1.0" "User Commands"
+.SH NAME
+cb \- copy text, file contents, or piped input to the clipboard
+.SH SYNOPSIS
+.B cb
+[\fIOPTIONS\fR] [\fIFILES...\fR | \fITEXT...\fR]
+.br
+.B echo
+"hello" | cb
+.SH DESCRIPTION
+.B cb
+is a user-friendly clipboard utility that copies text, file contents, or piped
+input into the system clipboard. It provides configurable defaults, safe size
+limits, intelligent file handling, and colored log messages for clarity.
+
+By default, \fBcb\fR:
+.IP \[bu] 2
+Copies plain text arguments directly to the clipboard.
+.IP \[bu]
+Copies the contents of files if file paths are passed.
+.IP \[bu]
+Copies piped input when used in a pipeline.
+.IP \[bu]
+Excludes common unnecessary files (e.g., logs, build outputs).
+.IP \[bu]
+Limits maximum total copied size to 1MB for safety.
+
+Configuration can be defined system-wide in
+.IR /etc/cbrc
+or per-user in
+.IR ~/.cbrc ,
+which is automatically created if missing.
+
+.SH OPTIONS
+.TP
+.BR -d ", " --dir
+Include files from directories (non-recursive by default).
+.TP
+.BR -r ", " --recursive
+Recursively include files in subdirectories (requires \fB-d\fR).
+.TP
+.BR -i ", " --include-dirs
+Include directory names themselves as plain text.
+.TP
+.BR --max-size=\fIN\fR
+Set the maximum total size allowed for all inputs. Units supported:
+.B B, KB, MB, GB.
+Default: \fB1MB\fR.
+Use \fB--max-size=0\fR to disable safety checks.
+.TP
+.B --dry-run
+Simulate the copy operation, showing what would be copied without modifying the clipboard.
+.TP
+.B --show-config
+Display effective configuration (after merging system, user, and CLI overrides).
+.TP
+.BR -v ", " --verbose
+Enable debug messages.
+.TP
+.BR -h ", " --help
+Show a detailed help menu.
+
+.SH CONFIGURATION
+The following files are read, in order:
+.IP \[bu] 2
+\fI/etc/cbrc\fR (system-wide defaults)
+.IP \[bu]
+\fI~/.cbrc\fR (user-specific, silently created if missing)
+
+The following variables can be set in configuration:
+.IP \[bu] 2
+\fBMODE\fR        — clipboard mode (reserved for future use).
+.IP \[bu]
+\fBDIR\fR         — include directory contents by default (true/false).
+.IP \[bu]
+\fBRECURSIVE\fR   — enable recursive scanning (true/false).
+.IP \[bu]
+\fBINCLUDE_DIRS\fR — include directory names as text (true/false).
+.IP \[bu]
+\fBMAX_SIZE\fR    — maximum allowed size (e.g., "2MB").
+
+.SH EXCLUDES
+The following file types and directories are automatically ignored:
+.IP \[bu] 2
+*.log, *.tmp, *.bak
+.IP \[bu]
+node_modules/, build/, dist/, __pycache__/
+
+.SH EXAMPLES
+.TP
+Copy plain text:
+.B cb "Hello World"
+.TP
+Copy contents of a file:
+.B cb file.txt
+.TP
+Copy all top-level files in a directory:
+.B cb -d ./docs
+.TP
+Recursively copy all files up to 5MB:
+.B cb -d -r ./src --max-size=5MB
+.TP
+Copy piped input:
+.B echo "test" | cb
+
+.SH EXIT STATUS
+.TP
+0
+Success.
+.TP
+1
+Failure due to error (e.g., xsel missing, empty input, exceeded max size).
+
+.SH REQUIREMENTS
+Requires \fBxsel(1)\fR to be installed and available in \fB\$PATH\fR.
+
+.SH AUTHOR
+Written by Mahros AL-Qabasy <mahros.elqabasy@gmail.com>.  
+Project repository: <https://github.com/elqabasy/voidtools>.
+
+.SH SEE ALSO
+.BR xsel (1),
+.BR xclip (1)

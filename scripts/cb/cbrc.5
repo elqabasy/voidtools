@@ -1,0 +1,82 @@
+.TH CBRC 5 "August 2025" "cb 1.0" "File Formats"
+.SH NAME
+cbrc \- configuration file for cb clipboard utility
+.SH SYNOPSIS
+\fI/etc/cbrc\fR
+.br
+\fI~/.cbrc\fR
+.SH DESCRIPTION
+The
+.B cb
+utility reads configuration settings from
+.I /etc/cbrc
+(system-wide defaults) and
+.I ~/.cbrc
+(user-specific overrides).  
+If
+.I ~/.cbrc
+does not exist, it is silently created with safe defaults.
+
+The configuration file uses a simple KEY=VALUE format, one setting per line.
+Lines beginning with \fB#\fR are treated as comments and ignored.
+
+.SH VARIABLES
+The following variables are recognized:
+
+.TP
+.B MODE
+Clipboard mode. Reserved for future extensions. Default: \fBclipboard\fR.
+.TP
+.B DIR
+Whether to include files from directories by default.  
+Values: \fBtrue\fR or \fBfalse\fR.  
+Default: \fBfalse\fR.
+.TP
+.B RECURSIVE
+Whether to scan directories recursively when \fB-d\fR is used.  
+Values: \fBtrue\fR or \fBfalse\fR.  
+Default: \fBfalse\fR.
+.TP
+.B INCLUDE_DIRS
+Whether to include directory names themselves as plain text.  
+Values: \fBtrue\fR or \fBfalse\fR.  
+Default: \fBfalse\fR.
+.TP
+.B MAX_SIZE
+Maximum total allowed size of all copied data.  
+Examples: \fB1MB\fR, \fB500KB\fR, \fB0\fR (disables safety limit).  
+Default: \fB1MB\fR.
+.TP
+.B EXCLUDES
+A space-separated list of glob patterns to ignore.  
+Defaults include:
+\fB*.log *.tmp *.bak node_modules/ build/ dist/ __pycache__/\fR
+
+.SH EXAMPLES
+A minimal \fB~/.cbrc\fR:
+
+.EX
+# ~/.cbrc — User defaults for cb.sh
+MODE=clipboard
+DIR=false
+RECURSIVE=false
+INCLUDE_DIRS=false
+MAX_SIZE=2MB
+EXCLUDES=*.log *.tmp node_modules/ build/ dist/
+.EE
+
+.SH FILES
+.TP
+.I /etc/cbrc
+System-wide defaults.
+.TP
+.I ~/.cbrc
+User-specific overrides, created silently if missing.
+
+.SH SEE ALSO
+.BR cb (1),
+.BR xsel (1)
+
+.SH AUTHOR
+Written by Mahros AL-Qabasy <mahros.elqabasy@gmail.com>.  
+Project repository: <https://github.com/elqabasy/voidtools>.

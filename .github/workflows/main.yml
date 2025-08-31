@@ -90,7 +90,15 @@ jobs:
 
 
           # Compress man pages
-          gzip -f pkg/usr/share/man/man1/*.1
+          # Copy man pages for all sections automatically
+          for manpage in $(find scripts/ -type f -regex '.*\.[1-9]$'); do
+            section="${manpage##*.}"   # extract the number after the dot
+            mkdir -p "pkg/usr/share/man/man${section}"
+            cp "$manpage" "pkg/usr/share/man/man${section}/"
+            gzip -f "pkg/usr/share/man/man${section}/$(basename "$manpage")"
+          done
+
+          # gzip -f pkg/usr/share/man/man1/*.1
 
       - name: Build .deb Package
         run: dpkg-deb --build pkg voidtools.deb

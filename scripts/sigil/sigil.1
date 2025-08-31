@@ -1,231 +1,133 @@
-#!/bin/bash
+.\" Manpage for sigil
+.\" Contact Mahros AL-Qabasy <mahros.elqabasy@hotmail.com>
+.TH SIGIL 1 "2025-08-31" "version 1.2.0" "User Commands"
+.SH NAME
+sigil \- command-line tool to handle and manipulate file signatures
 
-set -euo pipefail
+.SH SYNOPSIS
+.B sigil
+[\fIoptions\fR] [\fIarguments\fR]
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SIG_DB="${SCRIPT_DIR}/signatures.db"
-LOG_DIR="${SCRIPT_DIR}/logs"
-LOG_FILE="${LOG_DIR}/sigil.log"
-VERSION="1.2.0"
-VERBOSE=0
-FORCE=0
-OUT_FILE=""
+.SH DESCRIPTION
+\fBsigil\fR is a professional, scalable CLI tool designed for inspecting,
+inserting, removing, and replacing known binary file signatures (magic numbers).
+It safely operates on copies of files to avoid corruption and supports
+a wide range of common file signatures.
 
-mkdir -p "$LOG_DIR"
-touch "$LOG_FILE"
+The tool is ideal for developers, sysadmins, and security researchers
+who work frequently with file formats and need to automate signature
+manipulation and detection.
 
-source "$SIG_DB"
+.SH OPTIONS
+.TP
+\fB--get <type>\fR
+Outputs the raw binary signature of the specified file type.
 
-log() {
-    [[ $VERBOSE -eq 1 ]] && echo "[+] $1"
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG_FILE"
-}
+.TP
+\fB--prepend <type> <file>\fR
+Prepends the specified signature to the given file, outputs to a new file.
 
-color_echo() {
-    case "$1" in
-        green) echo -e "\e[32m$2\e[0m" ;;
-        red) echo -e "\e[31m$2\e[0m" ;;
-        yellow) echo -e "\e[33m$2\e[0m" ;;
-        *) echo "$2" ;;
-    esac
-}
+.TP
+\fB--remove [<type>] <file>\fR
+Removes the given or detected signature from the beginning of a file.
+If type is omitted, the tool auto-detects the signature.
 
-banner() {
-    echo "╔══════════════════════════╗"
-    echo "║        SIGIL v$VERSION        ║"
-    echo "╚══════════════════════════╝"
-}
+.TP
+\fB--replace [<oldtype>] <newtype> <file>\fR
+Replaces the signature at the start of the file.
+If oldtype is omitted, it auto-detects the current signature.
 
-help_menu() {
-    banner
-    cat <<EOF
-Usage: sigil.sh [options] <args>
+.TP
+\fB--check <file>\fR
+Checks the file's signature against known signatures and reports it.
 
-Options:
-  --get <type>                    Output raw signature for given type
-  --prepend <type> <file>         Prepend signature to file
-  --remove [<type>] <file>        Remove matching or detected signature
-  --replace [<old>] <new> <file>  Replace matching or detected signature
-  --check <file>                  Check file's signature
-  --list                          List known types
-  --banner                        Show tool banner
-  --version                       Show version
-  -v                              Enable verbose logging
-  --force                         Overwrite output file if it exists
-  --output <file>, -o <file>      Set output file name
-  --help                          Show this help menu
-EOF
-    exit 0
-}
+.TP
+\fB--list\fR
+Lists all known file signature types supported by \fBsigil\fR.
 
-error_exit() {
-    color_echo red "Error: $1"
-    log "ERROR: $1"
-    exit 1
-}
+.TP
+\fB--output <file>\fR, \fB-o <file>\fR
+Specify the output filename for prepend, remove, or replace operations.
+If omitted, \fBsigil\fR auto-generates a descriptive output filename.
 
-normalize_type() {
-    echo "$1" | tr '[:upper:]' '[:lower:]'
-}
+.TP
+\fB--force\fR
+Overwrite output file if it already exists. By default, \fBsigil\fR refuses
+to overwrite files.
 
-detect_signature_type() {
-    file="$1"
-    head_bytes=$(head -c 12 "$file" | xxd -p)
-    for key in "${!SIGNATURES[@]}"; do
-        hex_sig=$(echo -ne "${SIGNATURES[$key]}" | xxd -p)
-        if [[ "$head_bytes" == "$hex_sig"* ]]; then
-            echo "$key"
-            return
-        fi
-    done
-    echo ""
-}
+.TP
+\fB-v\fR
+Enable verbose output and logging to assist with troubleshooting.
 
-prepend_sig() {
-    type=$(normalize_type "$1")
-    file="$2"
+.TP
+\fB--banner\fR
+Display the tool banner and version information.
 
-    [[ ! -f "$file" ]] && error_exit "File not found: $file"
-    [[ -z "${SIGNATURES[$type]:-}" ]] && error_exit "Unknown type: $type"
+.TP
+\fB--help\fR
+Display this help menu.
 
-    [[ -z "$OUT_FILE" ]] && OUT_FILE="sigil_prepended_$(basename "$file")"
-    [[ -f "$OUT_FILE" && $FORCE -ne 1 ]] && error_exit "Output file exists: $OUT_FILE"
+.TP
+\fB--version\fR
+Show the current version of \fBsigil\fR.
 
-    {
-        echo -ne "${SIGNATURES[$type]}"
-        cat "$file"
-    } > "$OUT_FILE"
+.SH USAGE EXAMPLES
 
-    color_echo green "Prepended $type to $file -> $OUT_FILE"
-    log "Prepended $type to $file"
-}
+.TP
+Display the PNG signature in raw bytes:
+.B sigil --get png
 
-remove_sig() {
-    type=""
-    file=""
-    if [[ $# -eq 1 ]]; then
-        file="$1"
-        type=$(detect_signature_type "$file")
-        [[ -z "$type" ]] && error_exit "No known signature detected in $file"
-    elif [[ $# -eq 2 ]]; then
-        type=$(normalize_type "$1")
-        file="$2"
-        [[ -z "${SIGNATURES[$type]:-}" ]] && error_exit "Unknown type: $type"
-    else
-        error_exit "Invalid usage for --remove"
-    fi
+.TP
+Prepend the PNG signature to a file:
+.B sigil --prepend png input.txt
 
-    [[ ! -f "$file" ]] && error_exit "File not found: $file"
+.TP
+Remove the signature automatically detected from a file:
+.B sigil --remove file.bin
 
-    sig_len=$(echo -ne "${SIGNATURES[$type]}" | wc -c)
-    head_sig=$(head -c "$sig_len" "$file")
+.TP
+Remove a specific signature (e.g., jpg) from a file:
+.B sigil --remove jpg image.jpg
 
-    [[ "$head_sig" != $(echo -ne "${SIGNATURES[$type]}") ]] && error_exit "Signature does not match for type '$type'"
+.TP
+Replace detected signature with JPEG signature:
+.B sigil --replace jpeg file.bin
 
-    [[ -z "$OUT_FILE" ]] && OUT_FILE="sigil_removed_$(basename "$file")"
-    [[ -f "$OUT_FILE" && $FORCE -ne 1 ]] && error_exit "Output file exists: $OUT_FILE"
+.TP
+Replace DOC signature with PNG in a file:
+.B sigil --replace doc png file.doc -o output.png --force
 
-    tail -c +$((sig_len + 1)) "$file" > "$OUT_FILE"
+.TP
+Check a file's signature:
+.B sigil --check unknown.bin
 
-    color_echo green "Removed $type signature from $file -> $OUT_FILE"
-    log "Removed $type signature from $file"
-}
+.TP
+List all known supported signatures:
+.B sigil --list
 
-replace_sig() {
-    old_type=""
-    new_type=""
-    file=""
+.TP
+Prepend MP3 signature verbosely:
+.B sigil --prepend mp3 song.raw -v
 
-    if [[ $# -eq 2 ]]; then
-        new_type=$(normalize_type "$1")
-        file="$2"
-        old_type=$(detect_signature_type "$file")
-        [[ -z "$old_type" ]] && error_exit "Could not detect any known signature"
-    elif [[ $# -eq 3 ]]; then
-        old_type=$(normalize_type "$1")
-        new_type=$(normalize_type "$2")
-        file="$3"
-        [[ -z "${SIGNATURES[$old_type]:-}" ]] && error_exit "Unknown old type: $old_type"
-    else
-        error_exit "Invalid usage for --replace"
-    fi
+.SH FILES
+.TP
+\fBsignatures.db\fR
+Signature database file loaded by \fBsigil\fR.
 
-    [[ -z "${SIGNATURES[$new_type]:-}" ]] && error_exit "Unknown new type: $new_type"
-    [[ ! -f "$file" ]] && error_exit "File not found: $file"
+.TP
+\fBlogs/sigil.log\fR
+Verbose operation log file.
 
-    old_sig_len=$(echo -ne "${SIGNATURES[$old_type]}" | wc -c)
-    file_head=$(head -c "$old_sig_len" "$file")
+.SH AUTHOR
+Mahros AL-Qabasy \<mahros.elqabasy@hotmail.com\>
 
-    [[ "$file_head" != $(echo -ne "${SIGNATURES[$old_type]}") ]] && error_exit "File does not start with expected '$old_type' signature"
+.SH REPORTING BUGS
+Report bugs and request features at:
+https://github.com/elqabasy/voidtools/issues
 
-    [[ -z "$OUT_FILE" ]] && OUT_FILE="sigil_replaced_$(basename "$file")"
-    [[ -f "$OUT_FILE" && $FORCE -ne 1 ]] && error_exit "Output file exists: $OUT_FILE"
+.SH COPYRIGHT
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
 
-    {
-        echo -ne "${SIGNATURES[$new_type]}"
-        tail -c +$((old_sig_len + 1)) "$file"
-    } > "$OUT_FILE"
-
-    color_echo green "Replaced $old_type with $new_type in $file -> $OUT_FILE"
-    log "Replaced $old_type with $new_type in $file"
-}
-
-get_sig() {
-    type=$(normalize_type "$1")
-    [[ -z "${SIGNATURES[$type]:-}" ]] && error_exit "Unknown type: $type"
-    echo -ne "${SIGNATURES[$type]}"
-    log "Output signature for $type"
-}
-
-check_sig() {
-    file="$1"
-    [[ ! -f "$file" ]] && error_exit "File not found: $file"
-
-    detected=$(detect_signature_type "$file")
-
-    if [[ -n "$detected" ]]; then
-        color_echo green "$file matches signature: $detected"
-        log "$file detected as $detected"
-    else
-        color_echo yellow "$file: No known signature detected"
-        log "$file has no known signature"
-    fi
-}
-
-list_types() {
-    echo "Available file types:"
-    for key in "${!SIGNATURES[@]}"; do
-        hex_val=$(echo -ne "${SIGNATURES[$key]}" | xxd -p)
-        printf "  %-10s : %s\n" "$key" "$hex_val"
-    done
-}
-
-ARGS=()
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --get) shift; CMD="get"; ARGS+=("$1");;
-        --prepend) shift; CMD="prepend"; ARGS+=("$1" "$2"); shift;;
-        --remove) shift; CMD="remove"; ARGS+=("$1"); [[ "$1" != -* && $# -gt 1 ]] && ARGS+=("$2") && shift;;
-        --replace) shift; CMD="replace"; ARGS+=("$1"); [[ "$1" != -* && $# -gt 1 ]] && ARGS+=("$2"); [[ "$2" != -* && $# -gt 2 ]] && ARGS+=("$3") && shift 2;;
-        --check) shift; CMD="check"; ARGS+=("$1");;
-        --list) CMD="list";;
-        --banner) banner; exit 0;;
-        --help) help_menu;;
-        --version) echo "$VERSION"; exit 0;;
-        --force) FORCE=1;;
-        --output|-o) shift; OUT_FILE="$1";;
-        -v) VERBOSE=1;;
-        *) error_exit "Unknown option: $1";;
-    esac
-    shift
-done
-
-case "${CMD:-}" in
-    get) get_sig "${ARGS[0]}";;
-    prepend) prepend_sig "${ARGS[0]}" "${ARGS[1]}";;
-    remove) remove_sig "${ARGS[@]}";;
-    replace) replace_sig "${ARGS[@]}";;
-    check) check_sig "${ARGS[0]}";;
-    list) list_types;;
-    *) help_menu;;
-esac
+.SH SEE ALSO
+file(1), xxd(1), hexdump(1), head(1), tail(1)
