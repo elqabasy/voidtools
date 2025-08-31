@@ -23,8 +23,16 @@ jobs:
       - name: Install dependencies
         run: sudo apt install -y dpkg-dev debhelper fakeroot
 
-      - name: Install shc dependency
-        run: sudo apt-get install -y shc
+      # - name: Install shc dependency
+      #   run: sudo apt-get install -y shc
+
+      - name: Install shc from source
+        run: |
+          git clone https://github.com/neurobin/shc.git
+          cd shc
+          ./configure
+          make
+          sudo make install
 
       - name: Prepare Package Structure
         run: |
