@@ -64,10 +64,20 @@ jobs:
           #   fi  
           # done
 
+          # find scripts/ -type f -iname "*.sh" -exec "shc -f {} -o scripts/bin/${{}%.sh} -r" \;
+
           # for script in scripts/*.sh; do
           #   b_name=$(basename "$script")
           #   shc -f "$script" -o "scripts/bin/${b_name%.sh}" -r
           # done
+
+
+          find scripts/ -type f -iname "*.sh" -exec sh -c '
+            for file do
+              base=$(basename "$file" .sh)
+              shc -f "$file" -o "scripts/bin/$base" -r
+            done
+          ' sh {} +
 
 
           # Add scripts to voidtools directory
