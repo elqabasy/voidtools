@@ -73,30 +73,26 @@ jobs:
 
 
           # define voidtools directory for the bin
-          # add a voidtools.sh inside /etc/profile.d/
-          # sudo echo "export PATH='$PATH:/usr/bin/voidtools'" > /etc/profile.d/voidtools.sh
-          # sudo chmod +x /etc/profile.d/voidtools.sh
+
 
           # handle .zshrc file if exists
           if [ -f ~/.zshrc ]; then
-            echo "export PATH='$PATH:/usr/bin/voidtools.sh'" >> ~/.zshrc
+            echo "export PATH=\"$PATH:/usr/bin/voidtools\"" >> ~/.zshrc
             source ~/.zshrc
           fi
 
 
           # handle .bashrc if exists
-          if [ -f ~/.bashhrc ]; then
-            echo "export PATH='$PATH:/usr/bin/voidtools.sh'" >> ~/.bashrc
+          if [ -f ~/.bashrc ]; then
+            echo "export PATH=\"$PATH:/usr/bin/voidtools\"" >> ~/.bashrc
             source ~/.bashrc
           fi
 
           # Copy man pages
           # copy tool-name.1 from every directory in scripts dir
-          find scripts/ -type f -iname "*.1" -exec cp {} pkg/usr/share/man/ma1 -r \;
+          find scripts/ -type f -iname "*.1" -exec cp {} pkg/usr/share/man/man1 -r \;
 
 
-          tree scripts/
-          tree pkg/
 
 
 

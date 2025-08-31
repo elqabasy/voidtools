@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# copy anything to clipboard
+
 # Ensure xsel is installed
 if ! command -v xsel &> /dev/null; then
     echo "Error: xsel is not installed. Please install it to use clipboard copying."
