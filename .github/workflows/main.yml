@@ -51,7 +51,7 @@ jobs:
           for sub in scripts/*; do
             if [ -d "$sub" ]; then
               b_name=$(basename "$sub")
-              shc -f "scripts/$sub/$b_name.sh" -o "scripts/bin/$b_name" -r
+              shc -f "$sub/$b_name.sh" -o "scripts/bin/$b_name" -r
             fi  
           done
 
