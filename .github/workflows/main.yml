@@ -56,12 +56,13 @@ jobs:
           mkdir -p scripts/bin
 
           # generate the bin files
-          for sub in scripts/*; do
-            if [ -d "$sub" ]; then
-              b_name=$(basename "$sub")
-              shc -f "$sub/$b_name.sh" -o "scripts/bin/$b_name" -r
-            fi  
-          done
+          # for sub in scripts/*; do
+          #   if [ -d "$sub" ]; then
+          #     b_name=$(basename "$sub")
+          #     # shc -f "$sub/$b_name.sh" -o "scripts/bin/$b_name" -r
+          #     echo "$sub/$b_name.sh" #  >> scripts/bin/$b_name"
+          #   fi  
+          # done
 
           # for script in scripts/*.sh; do
           #   b_name=$(basename "$script")
@@ -71,7 +72,7 @@ jobs:
 
           # Add scripts to voidtools directory
           # mkdir pkg/usr/bin/voidtools/
-          # mkdir pkg/usr/bin/voidtools/bin # this will contains all links to the binaries from every sub tool directory
+
 
 
 
