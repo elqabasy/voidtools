@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 #
 # cb.sh — Copy text, file contents, or piped input to clipboard
 #         with safe limits, excludes, and professional logging.

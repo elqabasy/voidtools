@@ -26,14 +26,6 @@ jobs:
       - name: Install shc dependency
         run: sudo apt-get install -y shc
 
-      # - name: Install shc from source
-      #   run: |
-      #     git clone https://github.com/neurobin/shc.git
-      #     cd shc
-      #     ./configure
-      #     make
-      #     sudo make install
-
       - name: Prepare Package Structure
         run: |
           mkdir -p pkg/DEBIAN
@@ -70,22 +62,7 @@ jobs:
 
 
 
-          # define voidtools directory for the bin
-          # handle .zshrc file if exists
-          # if [ -f ~/.zshrc ]; then
-          #   echo "export PATH=\"$PATH:/usr/bin/voidtools\"" >> ~/.zshrc
-          #   source ~/.zshrc
-          # fi
-
-
-          # handle .bashrc if exists
-          # if [ -f ~/.bashrc ]; then
-          #   echo "export PATH=\"$PATH:/usr/bin/voidtools\"" >> ~/.bashrc
-          #   source ~/.bashrc
-          # fi
-
           # Copy man pages
-          # copy tool-name.1 from every directory in scripts dir
           find scripts/ -type f -iname "*.1" -exec cp {} pkg/usr/share/man/man1 -r \;
 
 
@@ -97,8 +74,6 @@ jobs:
             cp "$manpage" "pkg/usr/share/man/man${section}/"
             gzip -f "pkg/usr/share/man/man${section}/$(basename "$manpage")"
           done
-
-          # gzip -f pkg/usr/share/man/man1/*.1
 
       - name: Build .deb Package
         run: dpkg-deb --build pkg voidtools.deb
