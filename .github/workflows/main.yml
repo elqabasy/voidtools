@@ -54,35 +54,14 @@ jobs:
 
           # Copy scripts to /usr/bin/
           mkdir -p scripts/bin
+          mkdir -p scripts/sh
 
-          # generate the bin files
-          # for sub in scripts/*; do
-          #   if [ -d "$sub" ]; then
-          #     b_name=$(basename "$sub")
-          #     # shc -f "$sub/$b_name.sh" -o "scripts/bin/$b_name" -r
-          #     echo "$sub/$b_name.sh" #  >> scripts/bin/$b_name"
-          #   fi  
-          # done
+          find scripts/ -type f -iname "*.sh" -exec "cp {} scripts/sh" \;
 
-          # find scripts/ -type f -iname "*.sh" -exec "shc -f {} -o scripts/bin/${{}%.sh} -r" \;
-
-          # for script in scripts/*.sh; do
-          #   b_name=$(basename "$script")
-          #   shc -f "$script" -o "scripts/bin/${b_name%.sh}" -r
-          # done
-
-
-          find scripts/ -type f -iname "*.sh" -exec sh -c '
-            for file do
-              base=$(basename "$file" .sh)
-              shc -f "$file" -o "scripts/bin/$base" -r
-            done
-          ' sh {} +
-
-
-          # Add scripts to voidtools directory
-          # mkdir pkg/usr/bin/voidtools/
-
+          for script in scripts/sh/*.sh; do
+            b_name=$(basename "$script")
+            shc -f "$script" -o "scripts/bin/${b_name%.sh}" -r
+          done
 
 
 
@@ -92,8 +71,6 @@ jobs:
 
 
           # define voidtools directory for the bin
-
-
           # handle .zshrc file if exists
           # if [ -f ~/.zshrc ]; then
           #   echo "export PATH=\"$PATH:/usr/bin/voidtools\"" >> ~/.zshrc
@@ -110,9 +87,6 @@ jobs:
           # Copy man pages
           # copy tool-name.1 from every directory in scripts dir
           find scripts/ -type f -iname "*.1" -exec cp {} pkg/usr/share/man/man1 -r \;
-
-
-
 
 
           # Compress man pages
