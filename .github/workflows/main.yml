@@ -70,13 +70,13 @@ jobs:
 
 
           # Add scripts to voidtools directory
-          mkdir pkg/usr/bin/voidtools/
-          mkdir pkg/usr/bin/voidtools/bin # this will contains all links to the binaries from every sub tool directory
+          # mkdir pkg/usr/bin/voidtools/
+          # mkdir pkg/usr/bin/voidtools/bin # this will contains all links to the binaries from every sub tool directory
 
 
 
           # then copy them from scripts/bin to pkg/usr/bin
-          cp scripts/bin/* pkg/usr/bin/voidtools/
+          cp scripts/bin/* pkg/usr/bin/
 
 
 
@@ -84,17 +84,17 @@ jobs:
 
 
           # handle .zshrc file if exists
-          if [ -f ~/.zshrc ]; then
-            echo "export PATH=\"$PATH:/usr/bin/voidtools\"" >> ~/.zshrc
-            source ~/.zshrc
-          fi
+          # if [ -f ~/.zshrc ]; then
+          #   echo "export PATH=\"$PATH:/usr/bin/voidtools\"" >> ~/.zshrc
+          #   source ~/.zshrc
+          # fi
 
 
           # handle .bashrc if exists
-          if [ -f ~/.bashrc ]; then
-            echo "export PATH=\"$PATH:/usr/bin/voidtools\"" >> ~/.bashrc
-            source ~/.bashrc
-          fi
+          # if [ -f ~/.bashrc ]; then
+          #   echo "export PATH=\"$PATH:/usr/bin/voidtools\"" >> ~/.bashrc
+          #   source ~/.bashrc
+          # fi
 
           # Copy man pages
           # copy tool-name.1 from every directory in scripts dir
