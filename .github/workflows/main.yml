@@ -92,8 +92,13 @@ jobs:
 
           # Copy man pages
           # copy tool-name.1 from every directory in scripts dir
-          find scripts/ -type f -iname "*.1" -exec cp {} pkg/usr/share/man/ma1 \;
-          # cp docs/MANUAL/*.1 pkg/usr/share/man/man1/
+          find scripts/ -type f -iname "*.1" -exec cp {} pkg/usr/share/man/ma1 -r \;
+
+
+          tree scripts/
+          tree pkg/
+
+
 
           # Compress man pages
           gzip -f pkg/usr/share/man/man1/*.1
