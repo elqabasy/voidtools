@@ -56,7 +56,7 @@ jobs:
           mkdir -p scripts/bin
           mkdir -p scripts/sh
 
-          find scripts/ -type f -iname "*.sh" -exec "cp {} scripts/sh/" \;
+          find scripts/ -type f -iname "*.sh" -exec cp {} scripts/sh/ \;
 
           for script in scripts/sh/*.sh; do
             b_name=$(basename "$script")
