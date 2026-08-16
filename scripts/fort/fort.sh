@@ -461,26 +461,109 @@ user_has_sudo() {
     id -nG "$user" | tr ' ' '\n' | grep -qxE 'sudo|wheel'
 }
 
+# Does sudoers actually grant this user anything? Authoritative, unlike group
+# membership alone, which says nothing about the effective sudoers policy.
+sudo_grants_exist() {
+    local user="$1"
+    sudo -l -U "$user" >/dev/null 2>&1
+}
+
+sudo_is_nopasswd() {
+    local user="$1"
+    sudo -l -U "$user" 2>/dev/null | grep -q 'NOPASSWD:'
+}
+
+# P = usable password, L = locked, NP = no password at all.
+password_status() {
+    local user="$1" st
+    st="$(passwd -S "$user" 2>/dev/null | awk '{print $2}' || true)"
+    [[ -n "$st" ]] || st="UNKNOWN"
+    printf '%s' "$st"
+}
+
+# sudo authenticates with the account password, so a locked or absent password
+# means sudo can never succeed unless a NOPASSWD rule applies.
+sudo_can_authenticate() {
+    local user="$1"
+    sudo_is_nopasswd "$user" && return 0
+    [[ "$(password_status "$user")" == "P" ]]
+}
+
+# Set an account password interactively so sudo has something to authenticate
+# against. SSH password auth stays disabled, so this does not widen remote login.
+ensure_sudo_password() {
+    local user="$1" role="$2"
+    if $DRY_RUN; then
+        log "${YELLOW}[dry-run]${RESET} ensure a sudo-usable password exists for $user"
+        return 0
+    fi
+    if sudo_is_nopasswd "$user"; then
+        info "$role '$user' has a NOPASSWD sudo rule; no password required."
+        return 0
+    fi
+    if [[ "$(password_status "$user")" == "P" ]]; then
+        info "$role '$user' already has a usable password for sudo."
+        return 0
+    fi
+    if [[ ! -t 0 ]]; then
+        warn "$role '$user' has no usable password and there is no terminal to prompt on."
+        warn "Set one later with: passwd $user"
+        return 1
+    fi
+
+    info "Setting a password for '$user' so sudo can authenticate."
+    info "(SSH password login stays disabled; this password is for sudo/console only.)"
+    local attempt=0
+    while (( attempt < 3 )); do
+        if passwd "$user"; then
+            ok "Password set for '$user'."
+            return 0
+        fi
+        attempt=$((attempt + 1))
+        warn "Password not set (attempt $attempt/3)."
+    done
+    warn "Could not set a password for '$user'."
+    return 1
+}
+
 verify_sudo_for() {
     local user="$1" role="$2" lockout="${3:-false}"
     if $DRY_RUN; then
-        log "${YELLOW}[dry-run]${RESET} verify sudo for $user"
+        log "${YELLOW}[dry-run]${RESET} verify working sudo for $user"
         return 0
     fi
-    if user_has_sudo "$user"; then
-        ok "$role '$user' is in a sudo-capable group."
+
+    local problem=""
+    if ! user_has_sudo "$user"; then
+        problem="'$user' is not in a sudo-capable group"
+    elif ! sudo_grants_exist "$user"; then
+        problem="sudoers grants no privileges to '$user'"
+    elif ! sudo_can_authenticate "$user"; then
+        problem="'$user' has no usable password (status: $(password_status "$user")) and no NOPASSWD rule, so sudo cannot authenticate"
+    fi
+
+    if [[ -z "$problem" ]]; then
+        ok "$role '$user' has working sudo (grants present, authentication possible)."
         return 0
     fi
+
     if [[ "$lockout" == "true" ]]; then
-        abort_lockout "$role '$user' cannot obtain sudo; disabling root login would leave no privileged access."
+        abort_lockout "$role sudo check failed: $problem. Disabling root login would leave no privileged access."
     fi
-    err "$EX_GENERAL" "$role '$user' was created but is not in a sudo-capable group."
+    warn "$role sudo check failed: $problem."
+    warn "Fix with: passwd $user   (or add a sudoers rule for '$user')"
+    return 1
 }
 
 ensure_admin() {
     ensure_linux_user "$ADMIN_USER" "administrator"
     grant_sudo "$ADMIN_USER" "administrator"
     install_ssh_key_for "$ADMIN_USER"
+    # Repair a missing sudo auth path before the lockout-critical check runs.
+    if ! $DRY_RUN && ! sudo_can_authenticate "$ADMIN_USER"; then
+        warn "Administrator '$ADMIN_USER' cannot authenticate to sudo yet."
+        ensure_sudo_password "$ADMIN_USER" "Administrator" || true
+    fi
     verify_sudo_for "$ADMIN_USER" "Administrator" true
 }
 
@@ -493,8 +576,13 @@ ensure_deploy_user() {
     ensure_linux_user "$DEPLOY_USER" "deploy user"
     grant_sudo "$DEPLOY_USER" "deploy user"
     install_ssh_key_for "$DEPLOY_USER"
-    verify_sudo_for "$DEPLOY_USER" "Deploy user" false
-    ok "Deploy user '$DEPLOY_USER' is ready (normal account with sudo + SSH key)."
+    ensure_sudo_password "$DEPLOY_USER" "Deploy user" || true
+    if verify_sudo_for "$DEPLOY_USER" "Deploy user" false; then
+        ok "Deploy user '$DEPLOY_USER' is ready (normal account, SSH key, working sudo)."
+    else
+        warn "Deploy user '$DEPLOY_USER' exists with an SSH key, but sudo is not usable yet."
+    fi
+    return 0
 }
 
 # ========= SSH hardening =========
@@ -927,6 +1015,21 @@ check() {
     fi
 }
 
+# Root login is disabled, so at least one SSH-allowed account must be able to
+# actually run sudo, otherwise the server has no reachable privileged access.
+verify_sudo_reachable() {
+    local eff_file="$1"
+    local users u
+    users="$(grep -i '^allowusers ' "$eff_file" | cut -d' ' -f2- || true)"
+    [[ -n "$users" ]] || return 1
+    for u in $users; do
+        if user_has_sudo "$u" && sudo_grants_exist "$u" && sudo_can_authenticate "$u"; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 FAIL_COUNT=0
 cmd_verify() {
     banner
@@ -938,6 +1041,7 @@ cmd_verify() {
         sshd -T 2>/dev/null > "$eff_file" || true
     fi
 
+    check "an SSH-allowed account has working sudo" verify_sudo_reachable "$eff_file"
     check "root SSH login disabled"            grep -qi '^permitrootlogin no' "$eff_file"
     check "password authentication disabled"   grep -qi '^passwordauthentication no' "$eff_file"
     check "public-key authentication enabled"  grep -qi '^pubkeyauthentication yes' "$eff_file"
