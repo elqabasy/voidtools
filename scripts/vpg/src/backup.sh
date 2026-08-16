@@ -184,6 +184,65 @@ fatal() {
   exit 1
 }
 
+# Fail with copy-paste remediation steps.
+# Usage: fatal_with_hint <message> <hint>...
+fatal_with_hint() {
+  local message="$1"
+  shift
+
+  printf '[%s] ERROR: %s\n' \
+    "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+    "${message}" >&2
+
+  if (( $# > 0 )); then
+    printf '\nSuggested fix:\n' >&2
+
+    local hint
+    for hint in "$@"; do
+      printf '  %s\n' "${hint}" >&2
+    done
+
+    printf '\n' >&2
+  fi
+
+  exit 1
+}
+
+quote_argument() {
+  printf '%q' "$1"
+}
+
+filesystem_type() {
+  stat -f -c '%T' -- "$1" 2>/dev/null || printf 'unknown'
+}
+
+# Mounts such as WSL /mnt/c, Windows shares, and FAT volumes report a fixed
+# mode regardless of chmod, so suggesting chmod there would be a dead end.
+filesystem_supports_permissions() {
+  case "$(filesystem_type "$1")" in
+    9p|v9fs|drvfs|lxfs|msdos|vfat|exfat|ntfs|fuseblk|cifs|smb2|smb3|smbfs|iso9660|udf)
+      return 1
+      ;;
+
+    *)
+      return 0
+      ;;
+  esac
+}
+
+suggested_secure_directory() {
+  printf '%s/vpg-backups/%s' \
+    "${HOME:-/var/backups}" \
+    "$(basename -- "$1")"
+}
+
+ownership_hint() {
+  printf 'sudo chown %s:%s %s' \
+    "$(id -u)" \
+    "$(id -g)" \
+    "$(quote_argument "$1")"
+}
+
 on_error() {
   local exit_code=$?
   local line_number="${1:-unknown}"
@@ -324,12 +383,34 @@ load_dotenv() {
 
   if [[ "${ALLOW_INSECURE_PERMISSIONS}" == false ]]; then
     [[ "${owner_uid}" == "${current_uid}" ]] ||
-      fatal \
-        "Environment file must be owned by UID ${current_uid}; current owner is UID ${owner_uid}."
+      fatal_with_hint \
+        "Environment file must be owned by UID ${current_uid}; current owner is UID ${owner_uid}." \
+        "$(ownership_hint "${file}")"
 
     if (( mode_decimal & 0077 )); then
-      fatal \
-        "Environment file must not be accessible by group or others: ${file} (mode ${mode})"
+      local -a hints=()
+      local secure_env_file
+
+      if filesystem_supports_permissions "${file}"; then
+        hints+=("chmod 0600 $(quote_argument "${file}")")
+      else
+        secure_env_file="${HOME:-/root}/.config/vpg/$(basename -- "${file}")"
+
+        hints+=(
+          "This path is on a $(filesystem_type "${file}") filesystem, which cannot store Unix permissions, so chmod has no effect."
+          "Copy the file to a Linux-native path and use that instead:"
+          "install -D -m 0600 $(quote_argument "${file}") $(quote_argument "${secure_env_file}")"
+          "${SCRIPT_NAME} <output_directory> --env-file $(quote_argument "${secure_env_file}")"
+        )
+      fi
+
+      hints+=(
+        "Or re-run the same command with --allow-insecure-permissions to accept the risk."
+      )
+
+      fatal_with_hint \
+        "Environment file must not be accessible by group or others: ${file} (mode ${mode})" \
+        "${hints[@]}"
     fi
   fi
 
@@ -752,12 +833,30 @@ read_password_file() {
   mode_decimal=$((8#${mode}))
 
   [[ "${owner_uid}" == "${current_uid}" ]] ||
-    fatal \
-      "Password file must be owned by UID ${current_uid}; current owner is UID ${owner_uid}."
+    fatal_with_hint \
+      "Password file must be owned by UID ${current_uid}; current owner is UID ${owner_uid}." \
+      "$(ownership_hint "${file}")"
 
   if (( mode_decimal & 0077 )); then
-    fatal \
-      "Password file must not be accessible by group or others: ${file} (mode ${mode})"
+    local -a hints=()
+
+    if filesystem_supports_permissions "${file}"; then
+      hints+=("chmod 0600 $(quote_argument "${file}")")
+    else
+      hints+=(
+        "This path is on a $(filesystem_type "${file}") filesystem, which cannot store Unix permissions, so chmod has no effect."
+      )
+    fi
+
+    # --allow-insecure-permissions deliberately does not cover secrets.
+    hints+=(
+      "Or pass the password without a file:"
+      "printf '%s\\n' \"\${POSTGRES_PASSWORD}\" | ${SCRIPT_NAME} <output_directory> --password-stdin"
+    )
+
+    fatal_with_hint \
+      "Password file must not be accessible by group or others: ${file} (mode ${mode})" \
+      "${hints[@]}"
   fi
 
   IFS= read -r POSTGRES_PASSWORD_VALUE < "${file}" || true
@@ -882,10 +981,15 @@ prepare_output_root() {
     fatal "Resolved output directory must not be a symbolic link."
 
   [[ -w "${OUTPUT_ROOT}" ]] ||
-    fatal "Output directory is not writable: ${OUTPUT_ROOT}"
+    fatal_with_hint \
+      "Output directory is not writable: ${OUTPUT_ROOT}" \
+      "$(ownership_hint "${OUTPUT_ROOT}")" \
+      "chmod 0700 $(quote_argument "${OUTPUT_ROOT}")"
 
   [[ -x "${OUTPUT_ROOT}" ]] ||
-    fatal "Output directory is not searchable: ${OUTPUT_ROOT}"
+    fatal_with_hint \
+      "Output directory is not searchable: ${OUTPUT_ROOT}" \
+      "chmod 0700 $(quote_argument "${OUTPUT_ROOT}")"
 
   local owner_uid
   local current_uid
@@ -898,13 +1002,35 @@ prepare_output_root() {
   permissions_decimal=$((8#${permissions}))
 
   [[ "${owner_uid}" == "${current_uid}" ]] ||
-    fatal \
-      "Output directory must be owned by UID ${current_uid}; current owner is UID ${owner_uid}."
+    fatal_with_hint \
+      "Output directory must be owned by UID ${current_uid}; current owner is UID ${owner_uid}." \
+      "$(ownership_hint "${OUTPUT_ROOT}")"
 
   if [[ "${ALLOW_INSECURE_PERMISSIONS}" == false ]]; then
     if (( permissions_decimal & 0022 )); then
-      fatal \
-        "Output directory must not be writable by group or others: ${OUTPUT_ROOT} (mode ${permissions})"
+      local -a hints=()
+      local secure_directory
+
+      if filesystem_supports_permissions "${OUTPUT_ROOT}"; then
+        hints+=("chmod 0700 $(quote_argument "${OUTPUT_ROOT}")")
+      else
+        secure_directory="$(suggested_secure_directory "${OUTPUT_ROOT}")"
+
+        hints+=(
+          "This path is on a $(filesystem_type "${OUTPUT_ROOT}") filesystem, which cannot store Unix permissions, so chmod has no effect."
+          "Back up to a Linux-native directory instead:"
+          "install -d -m 0700 $(quote_argument "${secure_directory}")"
+          "${SCRIPT_NAME} $(quote_argument "${secure_directory}") --container $(quote_argument "${POSTGRES_CONTAINER}")"
+        )
+      fi
+
+      hints+=(
+        "Or re-run the same command with --allow-insecure-permissions to accept the risk."
+      )
+
+      fatal_with_hint \
+        "Output directory must not be writable by group or others: ${OUTPUT_ROOT} (mode ${permissions})" \
+        "${hints[@]}"
     fi
   fi
 }

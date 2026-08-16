@@ -406,6 +406,42 @@ A PostgreSQL-compatible container image providing
 .BR pg_restore ,
 and
 .B pg_isready
+.SH TROUBLESHOOTING
+When a failure has a known remediation,
+.B vpg
+prints a
+.B "Suggested fix"
+block containing the command to run.
+.TP
+.B "Output directory must not be writable by group or others"
+Restrict the directory, for example
+.BR "chmod 0700 /srv/backups/postgres" .
+.TP
+.B "Output directory must be owned by UID N"
+Take ownership using the suggested
+.BR chown (1)
+command.
+.TP
+Windows-backed and network mounts
+Paths under
+.I /mnt
+in WSL, along with FAT, exFAT, NTFS, and SMB mounts, report a fixed
+permission mode that
+.BR chmod (1)
+cannot change. Back up to a Linux-native directory instead, or pass
+.B \-\-allow\-insecure\-permissions
+to accept the risk. In this case
+.B vpg
+suggests a concrete native path.
+.TP
+.B "Password file must not be accessible by group or others"
+Run
+.B chmod 0600
+on the file, or avoid the file entirely with
+.BR \-\-password\-stdin .
+Note that
+.B \-\-allow\-insecure\-permissions
+deliberately does not relax secret handling.
 .SH AUTHOR
 Written by Mahros AL-Qabasy <mahros.elqabasy@gmail.com>.
 .br

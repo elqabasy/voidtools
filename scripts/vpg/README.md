@@ -198,6 +198,41 @@ Important operational rules:
 4. Encrypt backups at rest with infrastructure-managed encryption.
 5. Retain the VPG version and container image used by each recovery plan.
 
+## Troubleshooting
+
+When a failure has a known remediation, VPG prints a `Suggested fix` block with
+the exact command to run:
+
+```text
+[2026-08-16T18:08:27Z] ERROR: Output directory must not be writable by group or others: /srv/backups/postgres (mode 777)
+
+Suggested fix:
+  chmod 0700 /srv/backups/postgres
+  Or re-run the same command with --allow-insecure-permissions to accept the risk.
+```
+
+Paths under `/mnt` in WSL, plus FAT, exFAT, NTFS, and SMB mounts, always report
+a fixed permission mode, so `chmod` cannot secure them. VPG detects this and
+suggests a Linux-native directory instead:
+
+```text
+[2026-08-16T18:08:27Z] ERROR: Output directory must not be writable by group or others: /mnt/c/Users/me/backups (mode 777)
+
+Suggested fix:
+  This path is on a v9fs filesystem, which cannot store Unix permissions, so chmod has no effect.
+  Back up to a Linux-native directory instead:
+  install -d -m 0700 /home/me/vpg-backups/backups
+  vpg backup /home/me/vpg-backups/backups --container infra_postgres
+  Or re-run the same command with --allow-insecure-permissions to accept the risk.
+```
+
+Backing up to a Windows-backed mount is supported with
+`--allow-insecure-permissions`, but any user on the host can then modify the
+backup, so prefer a native path and copy the archive afterwards.
+
+For a loose password file, `--allow-insecure-permissions` does not apply;
+either run `chmod 0600` on it or switch to `--password-stdin`.
+
 ## Command reference
 
 ```text
