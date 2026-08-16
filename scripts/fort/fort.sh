@@ -42,6 +42,8 @@ ASSUME_YES=false
 
 # harden inputs (env vars are read as defaults, CLI overrides below)
 ADMIN_USER="${ADMIN_USER:-}"
+DEPLOY_USER="${DEPLOY_USER:-deploy}"
+CREATE_DEPLOY_USER=true
 SSH_PUBLIC_KEY="${SSH_PUBLIC_KEY:-}"
 SSH_KEY_FILE=""
 SSH_PORT="${SSH_PORT:-22}"
@@ -139,8 +141,8 @@ normalize_bool() {
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
-fw_has_fort_table()   { nft list ruleset 2>/dev/null | grep -q 'table inet fort'; }
-fw_input_policy_drop() { nft list ruleset 2>/dev/null | grep -Eq 'hook input .* policy drop'; }
+fw_has_fort_table()    { nft list table inet fort >/dev/null 2>&1; }
+fw_input_policy_drop() { nft list chain inet fort input 2>/dev/null | grep -Eq 'hook input .* policy drop'; }
 
 confirm() {
     # confirm PROMPT — returns 0 to proceed. Safety-critical steps do NOT use this.
@@ -259,8 +261,10 @@ Global options:
 
 Harden options:
       --admin USER              Administrative account to retain SSH+sudo (required).
-      --ssh-key KEY             SSH public key string to install for the admin.
-      --ssh-key-file FILE       Read the admin SSH public key from FILE.
+      --deploy-user USER        Extra sudo-capable deploy account (default: deploy).
+      --no-deploy-user          Do not create/manage a deploy account.
+      --ssh-key KEY             SSH public key string to install for admin/deploy.
+      --ssh-key-file FILE       Read the SSH public key from FILE.
       --ssh-port PORT           SSH listening port (default: 22).
       --allow-http              Permit inbound TCP 80.
       --allow-https             Permit inbound TCP 443.
@@ -296,6 +300,9 @@ parse_args() {
 
             --admin)             shift; ADMIN_USER="${1:-}" ;;
             --admin=*)           ADMIN_USER="${1#*=}" ;;
+            --deploy-user)       shift; DEPLOY_USER="${1:-}"; CREATE_DEPLOY_USER=true ;;
+            --deploy-user=*)     DEPLOY_USER="${1#*=}"; CREATE_DEPLOY_USER=true ;;
+            --no-deploy-user)    CREATE_DEPLOY_USER=false ;;
             --ssh-key)           shift; SSH_PUBLIC_KEY="${1:-}" ;;
             --ssh-key=*)         SSH_PUBLIC_KEY="${1#*=}" ;;
             --ssh-key-file)      shift; SSH_KEY_FILE="${1:-}" ;;
@@ -357,46 +364,82 @@ validate_public_key() {
     return 0
 }
 
+validate_username() {
+    local name="$1" label="$2"
+    [[ "$name" =~ ^[a-z_][a-z0-9_-]*$ ]] || err "$EX_USAGE" "Invalid $label username: '$name'"
+    [[ "$name" != "root" ]] || err "$EX_USAGE" "$label username cannot be 'root'."
+}
+
+ssh_allow_users() {
+    # Space-separated AllowUsers list for sshd.
+    local users=("$ADMIN_USER")
+    if $CREATE_DEPLOY_USER && [[ -n "$DEPLOY_USER" && "$DEPLOY_USER" != "$ADMIN_USER" ]]; then
+        users+=("$DEPLOY_USER")
+    fi
+    printf '%s' "${users[*]}"
+}
+
 validate_harden_inputs() {
     [[ -n "$ADMIN_USER" ]] || abort_lockout "No administrator specified. Pass --admin USER (or set ADMIN_USER)."
-    [[ "$ADMIN_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] || err "$EX_USAGE" "Invalid admin username: '$ADMIN_USER'"
+    validate_username "$ADMIN_USER" "admin"
     [[ "$ADMIN_USER" != "root" ]] || abort_lockout "--admin must be a non-root account; refusing to rely on root while disabling root login."
+
+    if $CREATE_DEPLOY_USER; then
+        [[ -n "$DEPLOY_USER" ]] || err "$EX_USAGE" "Deploy username is empty; pass --deploy-user NAME or --no-deploy-user."
+        validate_username "$DEPLOY_USER" "deploy"
+    fi
 
     validate_port "$SSH_PORT"
     load_ssh_key
     if ! validate_public_key; then
         abort_lockout "A valid administrator SSH public key is required (--ssh-key/--ssh-key-file). Without it, disabling password auth would lock you out."
     fi
-    ok "Inputs validated: admin=$ADMIN_USER port=$SSH_PORT key=$(printf '%.20s…' "$SSH_PUBLIC_KEY")"
-}
-
-# ========= Admin provisioning =========
-ensure_admin() {
-    if id "$ADMIN_USER" >/dev/null 2>&1; then
-        info "Administrator '$ADMIN_USER' already exists."
+    if $CREATE_DEPLOY_USER; then
+        ok "Inputs validated: admin=$ADMIN_USER deploy=$DEPLOY_USER port=$SSH_PORT key=$(printf '%.20s…' "$SSH_PUBLIC_KEY")"
     else
-        info "Creating administrator '$ADMIN_USER'."
-        run useradd -m -s /bin/bash "$ADMIN_USER"
+        ok "Inputs validated: admin=$ADMIN_USER deploy=disabled port=$SSH_PORT key=$(printf '%.20s…' "$SSH_PUBLIC_KEY")"
     fi
-
-    # Ensure sudo group membership (sudo on Debian/Ubuntu).
-    local sudo_group="sudo"
-    getent group sudo >/dev/null 2>&1 || sudo_group="wheel"
-    run usermod -aG "$sudo_group" "$ADMIN_USER"
-    info "Added '$ADMIN_USER' to '$sudo_group' group."
 }
 
-install_ssh_key() {
+# ========= User provisioning =========
+sudo_group_name() {
+    if getent group sudo >/dev/null 2>&1; then
+        echo "sudo"
+    else
+        echo "wheel"
+    fi
+}
+
+ensure_linux_user() {
+    local user="$1" role="$2"
+    if id "$user" >/dev/null 2>&1; then
+        info "$role '$user' already exists."
+    else
+        info "Creating $role '$user'."
+        run useradd -m -s /bin/bash "$user"
+    fi
+}
+
+grant_sudo() {
+    local user="$1" role="$2"
+    local sudo_group
+    sudo_group="$(sudo_group_name)"
+    run usermod -aG "$sudo_group" "$user"
+    info "Added '$user' ($role) to '$sudo_group' group."
+}
+
+install_ssh_key_for() {
+    local user="$1"
     local home ssh_dir auth
-    home="$(getent passwd "$ADMIN_USER" | cut -d: -f6 || true)"
+    home="$(getent passwd "$user" | cut -d: -f6 || true)"
     # New accounts on Debian/Ubuntu get /home/<user>; fall back if getent is empty
     # (e.g. during --dry-run before the account is materialized).
-    [[ -n "$home" ]] || home="/home/$ADMIN_USER"
+    [[ -n "$home" ]] || home="/home/$user"
     ssh_dir="$home/.ssh"
     auth="$ssh_dir/authorized_keys"
 
     backup_file "$auth"
-    run install -d -m 0700 -o "$ADMIN_USER" -g "$ADMIN_USER" "$ssh_dir"
+    run install -d -m 0700 -o "$user" -g "$user" "$ssh_dir"
 
     if $DRY_RUN; then
         log "${YELLOW}[dry-run]${RESET} append key to $auth (if absent)"
@@ -404,26 +447,54 @@ install_ssh_key() {
         touch "$auth"
         if ! grep -qxF "$SSH_PUBLIC_KEY" "$auth" 2>/dev/null; then
             printf '%s\n' "$SSH_PUBLIC_KEY" >> "$auth"
-            info "Installed SSH key for $ADMIN_USER."
+            info "Installed SSH key for $user."
         else
-            info "SSH key already present for $ADMIN_USER."
+            info "SSH key already present for $user."
         fi
-        chown "$ADMIN_USER:$ADMIN_USER" "$auth"
+        chown "$user:$user" "$auth"
         chmod 0600 "$auth"
     fi
 }
 
-verify_sudo() {
-    # Confirm the admin can escalate (via group membership + a working sudoers).
+user_has_sudo() {
+    local user="$1"
+    id -nG "$user" | tr ' ' '\n' | grep -qxE 'sudo|wheel'
+}
+
+verify_sudo_for() {
+    local user="$1" role="$2" lockout="${3:-false}"
     if $DRY_RUN; then
-        log "${YELLOW}[dry-run]${RESET} verify sudo for $ADMIN_USER"
+        log "${YELLOW}[dry-run]${RESET} verify sudo for $user"
         return 0
     fi
-    if id -nG "$ADMIN_USER" | tr ' ' '\n' | grep -qxE 'sudo|wheel'; then
-        ok "Administrator '$ADMIN_USER' is in a sudo-capable group."
+    if user_has_sudo "$user"; then
+        ok "$role '$user' is in a sudo-capable group."
         return 0
     fi
-    abort_lockout "Administrator '$ADMIN_USER' cannot obtain sudo; disabling root login would leave no privileged access."
+    if [[ "$lockout" == "true" ]]; then
+        abort_lockout "$role '$user' cannot obtain sudo; disabling root login would leave no privileged access."
+    fi
+    err "$EX_GENERAL" "$role '$user' was created but is not in a sudo-capable group."
+}
+
+ensure_admin() {
+    ensure_linux_user "$ADMIN_USER" "administrator"
+    grant_sudo "$ADMIN_USER" "administrator"
+    install_ssh_key_for "$ADMIN_USER"
+    verify_sudo_for "$ADMIN_USER" "Administrator" true
+}
+
+ensure_deploy_user() {
+    $CREATE_DEPLOY_USER || { info "Deploy user creation disabled."; return 0; }
+    if [[ "$DEPLOY_USER" == "$ADMIN_USER" ]]; then
+        info "Deploy user matches admin ('$ADMIN_USER'); skipping duplicate account setup."
+        return 0
+    fi
+    ensure_linux_user "$DEPLOY_USER" "deploy user"
+    grant_sudo "$DEPLOY_USER" "deploy user"
+    install_ssh_key_for "$DEPLOY_USER"
+    verify_sudo_for "$DEPLOY_USER" "Deploy user" false
+    ok "Deploy user '$DEPLOY_USER' is ready (normal account with sudo + SSH key)."
 }
 
 # ========= SSH hardening =========
@@ -458,7 +529,7 @@ AllowAgentForwarding $agent_fwd
 ClientAliveInterval 300
 ClientAliveCountMax 2
 LogLevel VERBOSE
-AllowUsers $ADMIN_USER
+AllowUsers $(ssh_allow_users)
 EOF
 )"
 
@@ -548,6 +619,10 @@ preflight_ssh_lockout() {
     if [[ -n "$allowusers" ]] && ! grep -qw "$ADMIN_USER" <<<"$allowusers"; then
         abort_lockout "AllowUsers is set but does not include '$ADMIN_USER'."
     fi
+    if $CREATE_DEPLOY_USER && [[ -n "$DEPLOY_USER" && "$DEPLOY_USER" != "$ADMIN_USER" ]] \
+        && [[ -n "$allowusers" ]] && ! grep -qw "$DEPLOY_USER" <<<"$allowusers"; then
+        abort_lockout "AllowUsers is set but does not include deploy user '$DEPLOY_USER'."
+    fi
 
     # The admin must actually have an installed authorized key.
     local home auth; home="$(getent passwd "$ADMIN_USER" | cut -d: -f6 || true)"
@@ -570,10 +645,6 @@ reload_sshd() {
 
 # ========= Firewall (nftables, SSH-safe) =========
 configure_firewall() {
-    if ! have nft; then
-        info "Installing nftables."
-        pkg_install nftables
-    fi
     backup_file "$NFT_CONF"
 
     # During a port change keep 22 open too, so an in-flight session survives.
@@ -629,7 +700,13 @@ EOF
         nft -f "$NFT_CONF"
     fi
 
-    run systemctl enable --now nftables 2>/dev/null || true
+    if ! run systemctl enable --now nftables; then
+        abort_lockout "nftables could not be enabled; inspect: systemctl status nftables"
+    fi
+    if ! $DRY_RUN; then
+        fw_has_fort_table || abort_lockout "Fort firewall table is absent after applying $NFT_CONF."
+        fw_input_policy_drop || abort_lockout "Fort firewall input chain is not deny-by-default after applying $NFT_CONF."
+    fi
     ok "Firewall configured (SSH ports: $ssh_ports)."
     if [[ "$SSH_PORT" != "22" ]]; then
         warn "Port 22 left open for transition. After confirming login on $SSH_PORT, re-run without transition or remove it manually."
@@ -639,7 +716,6 @@ EOF
 
 # ========= Fail2Ban =========
 configure_fail2ban() {
-    have fail2ban-server || pkg_install fail2ban
     backup_file "$FAIL2BAN_JAIL"
 
     # Never ban ourselves: whitelist loopback, RFC1918, and the current client.
@@ -679,7 +755,6 @@ EOF
 
 # ========= Automatic security updates =========
 configure_unattended_upgrades() {
-    pkg_install unattended-upgrades
     local cfg="/etc/apt/apt.conf.d/20fort-auto-upgrades"
     backup_file "$cfg"
     local content
@@ -734,7 +809,6 @@ EOF
 
 # ========= Auditing =========
 configure_auditd() {
-    pkg_install auditd
     local rules="/etc/audit/rules.d/fort.rules"
     backup_file "$rules"
     local content
@@ -759,20 +833,64 @@ EOF
     ok "auditd configured."
 }
 
-# ========= Package helper =========
+# ========= Dependency and environment preflight =========
 APT_UPDATED=false
 pkg_install() {
-    local pkg="$1"
+    local packages=("$@")
     if $DRY_RUN; then
-        log "${YELLOW}[dry-run]${RESET} apt-get install -y $pkg"
+        log "${YELLOW}[dry-run]${RESET} apt-get install -y ${packages[*]}"
         return 0
     fi
     if ! $APT_UPDATED; then
-        DEBIAN_FRONTEND=noninteractive apt-get update -qq || warn "apt-get update failed; continuing."
+        DEBIAN_FRONTEND=noninteractive apt-get update -qq \
+            || err "$EX_GENERAL" "apt-get update failed; no hardening changes were made."
         APT_UPDATED=true
     fi
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$pkg" >/dev/null 2>&1 \
-        || warn "Failed to install $pkg; the related control may be skipped."
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${packages[@]}" \
+        || err "$EX_GENERAL" "Failed to install required dependencies: ${packages[*]}"
+}
+
+check_firewall_conflicts() {
+    if have ufw && ufw status 2>/dev/null | grep -q '^Status: active'; then
+        err "$EX_VALIDATION" "UFW is active. Fort uses nftables directly; disable or migrate UFW before hardening."
+    fi
+    if have firewall-cmd && systemctl is-active --quiet firewalld; then
+        err "$EX_VALIDATION" "firewalld is active. Fort cannot safely manage nftables concurrently."
+    fi
+    if systemctl is-active --quiet docker 2>/dev/null || systemctl is-active --quiet containerd 2>/dev/null; then
+        warn "A container runtime is active. Fort's nftables rules may affect published ports and forwarding."
+    fi
+}
+
+ensure_dependencies() {
+    info "Checking required dependencies before hardening."
+    have apt-get || err "$EX_UNSUPPORTED" "apt-get is required on supported Debian/Ubuntu systems."
+    have systemctl || err "$EX_UNSUPPORTED" "systemd/systemctl is required."
+
+    local missing_packages=()
+    have sshd              || missing_packages+=(openssh-server)
+    have ssh-keygen        || missing_packages+=(openssh-client)
+    have sudo              || missing_packages+=(sudo)
+    have nft               || missing_packages+=(nftables)
+    have fail2ban-server   || missing_packages+=(fail2ban)
+    have unattended-upgrade || missing_packages+=(unattended-upgrades)
+    have auditctl          || missing_packages+=(auditd)
+    have sysctl            || missing_packages+=(procps)
+    have ss                || missing_packages+=(iproute2)
+
+    if (( ${#missing_packages[@]} > 0 )); then
+        info "Installing missing dependencies: ${missing_packages[*]}"
+        pkg_install "${missing_packages[@]}"
+    fi
+
+    if ! $DRY_RUN; then
+        local tool
+        for tool in sshd ssh-keygen sudo nft fail2ban-server unattended-upgrade auditctl sysctl ss; do
+            have "$tool" || err "$EX_GENERAL" "Required dependency '$tool' is still unavailable after installation."
+        done
+    fi
+    check_firewall_conflicts
+    ok "Dependency and firewall-conflict preflight passed."
 }
 
 # ========= Commands =========
@@ -782,9 +900,15 @@ cmd_doctor() {
     info "OS: $OS_ID $OS_VERSION"
     info "Root: $([[ ${EUID:-$(id -u)} -eq 0 ]] && echo yes || echo no)"
     local tool
-    for tool in sshd nft fail2ban-server unattended-upgrade auditctl sysctl ssh-keygen; do
+    for tool in apt-get systemctl sshd ssh-keygen sudo nft fail2ban-server unattended-upgrade auditctl sysctl ss; do
         if have "$tool"; then ok "found: $tool"; else warn "missing: $tool (Fort can install it during harden)"; fi
     done
+    if have ufw; then
+        info "UFW: $(ufw status 2>/dev/null | awk -F': ' '/^Status:/ {print $2}' || echo unknown)"
+    fi
+    if have firewall-cmd; then
+        info "firewalld: $(systemctl is-active firewalld 2>/dev/null || true)"
+    fi
     if [[ -n "${SSH_CONNECTION:-}" ]]; then
         info "Running over SSH from: $(awk '{print $1}' <<<"$SSH_CONNECTION")"
         warn "Keep this session OPEN while you test a second SSH login after hardening."
@@ -807,6 +931,7 @@ FAIL_COUNT=0
 cmd_verify() {
     banner
     detect_os
+    require_root verify
     FAIL_COUNT=0
     local eff_file; eff_file="$(mktemp)"
     if have sshd && [[ ${EUID:-$(id -u)} -eq 0 ]]; then
@@ -817,8 +942,8 @@ cmd_verify() {
     check "password authentication disabled"   grep -qi '^passwordauthentication no' "$eff_file"
     check "public-key authentication enabled"  grep -qi '^pubkeyauthentication yes' "$eff_file"
     check "SSH configuration valid"            sshd -t
-    check "firewall active (nftables)"         fw_has_fort_table
-    check "default inbound policy is drop"     fw_input_policy_drop
+    check "firewall active (Fort nftables table)" fw_has_fort_table
+    check "default inbound policy is drop"        fw_input_policy_drop
     check "Fail2Ban active"                    systemctl is-active --quiet fail2ban
     check "automatic security updates enabled" systemctl is-enabled --quiet unattended-upgrades
     check "auditd active"                      systemctl is-active --quiet auditd
@@ -898,31 +1023,34 @@ cmd_harden() {
     # 2) State-changing work requires root.
     require_root harden
 
+    # 3) Install and verify every dependency and reject firewall-manager
+    #    conflicts before changing accounts, SSH, or firewall state.
+    ensure_dependencies
+
     warn "IMPORTANT: keep this SSH session OPEN. After hardening, open a NEW"
     warn "session as '$ADMIN_USER' and run 'sudo whoami' BEFORE closing this one."
 
-    # 3) Establish backup dir up-front so rollback is always possible.
+    # 4) Establish backup dir up-front so rollback is always possible.
     new_backup_dir
     record_backup_manifest
 
-    # 4) Admin + key + sudo BEFORE any restriction.
+    # 5) Admin + deploy + key + sudo BEFORE any restriction.
     ensure_admin
-    install_ssh_key
-    verify_sudo
+    ensure_deploy_user
 
-    # 5) Firewall first so SSH is explicitly allowed before we tighten SSH.
+    # 6) Firewall first so SSH is explicitly allowed before we tighten SSH.
     configure_firewall
 
-    # 6) Write hardened SSH config, validate syntax, then prove no lockout.
+    # 7) Write hardened SSH config, validate syntax, then prove no lockout.
     write_sshd_config
     validate_sshd
     preflight_ssh_lockout
 
-    # 7) Only now reload the daemon, then re-verify.
+    # 8) Only now reload the daemon, then re-verify.
     reload_sshd
     preflight_ssh_lockout
 
-    # 8) Defense-in-depth (non-lockout-critical).
+    # 9) Defense-in-depth (non-lockout-critical).
     configure_fail2ban
     configure_unattended_upgrades
     configure_sysctl
