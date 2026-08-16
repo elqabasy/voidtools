@@ -25,9 +25,10 @@ EX_VALIDATION=4    # security configuration validation failed
 EX_LOCKOUT=5       # aborted to prevent possible administrator lockout
 
 # ========= Colors =========
+# Use $'...' so escapes work with both echo -e and plain cat/printf.
 if [[ -t 2 ]]; then
-    RESET="\e[0m"; RED="\e[31m"; GREEN="\e[32m"; YELLOW="\e[33m"
-    BLUE="\e[34m"; MAGENTA="\e[35m"; CYAN="\e[36m"; BOLD="\e[1m"
+    RESET=$'\e[0m'; RED=$'\e[31m'; GREEN=$'\e[32m'; YELLOW=$'\e[33m'
+    BLUE=$'\e[34m'; MAGENTA=$'\e[35m'; CYAN=$'\e[36m'; BOLD=$'\e[1m'
 else
     RESET=""; RED=""; GREEN=""; YELLOW=""; BLUE=""; MAGENTA=""; CYAN=""; BOLD=""
 fi
@@ -431,8 +432,8 @@ write_sshd_config() {
     detect_conflicting_sshd_dropins
 
     local tcp_fwd="no" agent_fwd="no"
-    [[ "$ALLOW_SSH_TCP_FORWARDING" == "true" ]] && tcp_fwd="yes"
-    [[ "$ALLOW_SSH_AGENT_FORWARDING" == "true" ]] && agent_fwd="yes"
+    if [[ "$ALLOW_SSH_TCP_FORWARDING" == "true" ]]; then tcp_fwd="yes"; fi
+    if [[ "$ALLOW_SSH_AGENT_FORWARDING" == "true" ]]; then agent_fwd="yes"; fi
 
     info "Writing hardened SSH configuration to $SSHD_DROPIN"
     local content
@@ -497,12 +498,13 @@ detect_conflicting_sshd_dropins() {
     local f
     for f in "$d"/*.conf; do
         [[ -e "$f" ]] || continue
-        [[ "$f" == "$SSHD_DROPIN" ]] && continue
+        if [[ "$f" == "$SSHD_DROPIN" ]]; then continue; fi
         if grep -qiE '^\s*(PasswordAuthentication|PermitRootLogin)\s+(yes|prohibit-password)' "$f"; then
             warn "Conflicting SSH drop-in detected: $f (may re-enable password/root login)."
             warn "Fort's 00-fort.conf is ordered first, so it wins, but review this file."
         fi
     done
+    return 0
 }
 
 validate_sshd() {
@@ -531,14 +533,18 @@ preflight_ssh_lockout() {
         warn "$(cat /tmp/fort-sshd-T.log 2>/dev/null)"
         abort_lockout "Could not evaluate effective SSH config for '$ADMIN_USER'."
     fi
-    local get; get() { echo "$eff" | grep -i "^$1 " | awk '{print $2}'; }
+    local get
+    get() { echo "$eff" | grep -i "^$1 " | awk '{print $2}'; return 0; }
 
     [[ "$(get pubkeyauthentication)" == "yes" ]] || abort_lockout "Effective config disables public-key auth for $ADMIN_USER."
-    [[ "$(get permitrootlogin)"      != "yes" ]] || warn "Root login still permitted (unexpected)."
-    [[ "$(get port)"                 == "$SSH_PORT" ]] || abort_lockout "Effective SSH port ($(get port)) != requested ($SSH_PORT)."
+    if [[ "$(get permitrootlogin)" == "yes" ]]; then
+        warn "Root login still permitted (unexpected)."
+    fi
+    [[ "$(get port)" == "$SSH_PORT" ]] || abort_lockout "Effective SSH port ($(get port)) != requested ($SSH_PORT)."
 
     # If AllowUsers/AllowGroups is set, the admin must be included.
-    local allowusers; allowusers="$(echo "$eff" | grep -i '^allowusers ' | cut -d' ' -f2-)"
+    local allowusers
+    allowusers="$(echo "$eff" | grep -i '^allowusers ' | cut -d' ' -f2- || true)"
     if [[ -n "$allowusers" ]] && ! grep -qw "$ADMIN_USER" <<<"$allowusers"; then
         abort_lockout "AllowUsers is set but does not include '$ADMIN_USER'."
     fi
@@ -572,11 +578,11 @@ configure_firewall() {
 
     # During a port change keep 22 open too, so an in-flight session survives.
     local ssh_ports="$SSH_PORT"
-    [[ "$SSH_PORT" != "22" ]] && ssh_ports="22, $SSH_PORT"
+    if [[ "$SSH_PORT" != "22" ]]; then ssh_ports="22, $SSH_PORT"; fi
 
     local web_rules=""
-    [[ "$ALLOW_HTTP"  == "true" ]] && web_rules+="        tcp dport 80 accept\n"
-    [[ "$ALLOW_HTTPS" == "true" ]] && web_rules+="        tcp dport 443 accept\n"
+    if [[ "$ALLOW_HTTP"  == "true" ]]; then web_rules+="        tcp dport 80 accept\n"; fi
+    if [[ "$ALLOW_HTTPS" == "true" ]]; then web_rules+="        tcp dport 443 accept\n"; fi
 
     info "Writing deny-by-default nftables policy (SSH always permitted)."
     local content
@@ -623,9 +629,12 @@ EOF
         nft -f "$NFT_CONF"
     fi
 
-    run systemctl enable nftables 2>/dev/null || true
+    run systemctl enable --now nftables 2>/dev/null || true
     ok "Firewall configured (SSH ports: $ssh_ports)."
-    [[ "$SSH_PORT" != "22" ]] && warn "Port 22 left open for transition. After confirming login on $SSH_PORT, re-run without transition or remove it manually."
+    if [[ "$SSH_PORT" != "22" ]]; then
+        warn "Port 22 left open for transition. After confirming login on $SSH_PORT, re-run without transition or remove it manually."
+    fi
+    return 0
 }
 
 # ========= Fail2Ban =========
@@ -637,7 +646,7 @@ configure_fail2ban() {
     local ignore="127.0.0.1/8 ::1 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16"
     if [[ -n "${SSH_CONNECTION:-}" ]]; then
         local client_ip; client_ip="$(awk '{print $1}' <<<"$SSH_CONNECTION")"
-        [[ -n "$client_ip" ]] && ignore="$ignore $client_ip"
+        if [[ -n "$client_ip" ]]; then ignore="$ignore $client_ip"; fi
         info "Whitelisting current SSH client in Fail2Ban: $client_ip"
     fi
 
@@ -925,7 +934,9 @@ cmd_harden() {
     warn "    ssh -p $SSH_PORT $ADMIN_USER@<server-ip>"
     warn "    sudo whoami   # expect: root"
     warn "Only after that succeeds should you close this session."
-    [[ "$SSH_PORT" != "22" ]] && warn "Port 22 is still open for transition; close it once the new port works."
+    if [[ "$SSH_PORT" != "22" ]]; then
+        warn "Port 22 is still open for transition; close it once the new port works."
+    fi
     exit "$EX_OK"
 }
 
