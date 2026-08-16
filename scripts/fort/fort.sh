@@ -141,8 +141,25 @@ normalize_bool() {
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
-fw_has_fort_table()    { nft list table inet fort >/dev/null 2>&1; }
-fw_input_policy_drop() { nft list chain inet fort input 2>/dev/null | grep -Eq 'hook input .* policy drop'; }
+fw_has_fort_table() { nft list table inet fort >/dev/null 2>&1; }
+
+# Confirm the Fort input chain is deny-by-default. Prefer JSON — plain `nft
+# list` formatting varies by version (named priorities, hook/policy on
+# separate lines), which made the old single-line regex a false failure.
+fw_input_policy_drop() {
+    local json out
+    if json="$(nft -j list chain inet fort input 2>/dev/null)"; then
+        if echo "$json" | grep -Eq '"policy"[[:space:]]*:[[:space:]]*"drop"'; then
+            return 0
+        fi
+        # JSON available but policy is not drop — treat as a real failure.
+        return 1
+    fi
+    out="$(nft list chain inet fort input 2>/dev/null || true)"
+    [[ -n "$out" ]] || return 1
+    echo "$out" | grep -Eq 'hook[[:space:]]+input' || return 1
+    echo "$out" | grep -Eq 'policy[[:space:]]+drop'
+}
 
 confirm() {
     # confirm PROMPT — returns 0 to proceed. Safety-critical steps do NOT use this.
