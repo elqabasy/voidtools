@@ -1,0 +1,2 @@
+scripts/vpg/**/*.sh text eol=lf
+scripts/vpg/vpg text eol=lf
