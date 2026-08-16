@@ -28,6 +28,10 @@ jobs:
 
       - name: Prepare Package Structure
         run: |
+          set -euo pipefail
+
+          BUILD_DIR="$(mktemp -d)"
+
           mkdir -p pkg/DEBIAN
           mkdir -p pkg/usr/bin
           mkdir -p pkg/usr/share/man/man1
@@ -44,36 +48,42 @@ jobs:
           Priority: optional
           EOF
 
-          # Copy scripts to /usr/bin/
-          mkdir -p scripts/bin
-          mkdir -p scripts/sh
+          # Compile single-file tools. Only scripts/<tool>/<tool>.sh is an
+          # entrypoint; helper scripts, installers, and tests are skipped.
+          for script in scripts/*/*.sh; do
+            tool="$(basename "$script" .sh)"
 
-          find scripts/ -type f -iname "*.sh" -exec cp {} scripts/sh/ \;
+            if [ "$(basename "$(dirname "$script")")" != "$tool" ]; then
+              echo "Skipping non-entrypoint script: $script"
+              continue
+            fi
 
-          for script in scripts/sh/*.sh; do
-            b_name=$(basename "$script")
-            shc -f "$script" -o "scripts/bin/${b_name%.sh}" -r
+            echo "Compiling $script"
+            cp "$script" "$BUILD_DIR/$tool.sh"
+            shc -f "$BUILD_DIR/$tool.sh" -o "pkg/usr/bin/$tool" -r
+            chmod 0755 "pkg/usr/bin/$tool"
           done
 
+          # vpg is a multi-file CLI: ship its library layout and link the
+          # entrypoint into PATH the same way scripts/vpg/install.sh does.
+          install -D -m 0755 scripts/vpg/vpg pkg/usr/lib/vpg/vpg
+          install -D -m 0755 scripts/vpg/src/backup.sh pkg/usr/lib/vpg/src/backup.sh
+          install -D -m 0755 scripts/vpg/src/restore.sh pkg/usr/lib/vpg/src/restore.sh
+          ln -sfn ../lib/vpg/vpg pkg/usr/bin/vpg
 
+          # Install and compress man pages for every section.
+          for manpage in scripts/*/*.[1-9]; do
+            [ -f "$manpage" ] || continue
 
-          # then copy them from scripts/bin to pkg/usr/bin
-          cp scripts/bin/* pkg/usr/bin/
+            section="${manpage##*.}"
+            name="$(basename "$manpage")"
 
-
-
-          # Copy man pages
-          find scripts/ -type f -iname "*.1" -exec cp {} pkg/usr/share/man/man1 -r \;
-
-
-          # Compress man pages
-          # Copy man pages for all sections automatically
-          for manpage in $(find scripts/ -type f -regex '.*\.[1-9]$'); do
-            section="${manpage##*.}"   # extract the number after the dot
-            mkdir -p "pkg/usr/share/man/man${section}"
-            cp "$manpage" "pkg/usr/share/man/man${section}/"
-            gzip -f "pkg/usr/share/man/man${section}/$(basename "$manpage")"
+            install -D -m 0644 "$manpage" "pkg/usr/share/man/man${section}/${name}"
+            gzip -9nf "pkg/usr/share/man/man${section}/${name}"
           done
+
+          echo "Package contents:"
+          find pkg -mindepth 1 \( -type f -o -type l \) | LC_ALL=C sort
 
       - name: Build .deb Package
         run: dpkg-deb --build pkg voidtools.deb

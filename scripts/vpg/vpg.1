@@ -1,0 +1,420 @@
+.TH VPG 1 "August 2026" "vpg 1.0.0" "User Commands"
+.SH NAME
+vpg \- secure PostgreSQL backup and recovery for Docker containers
+.SH SYNOPSIS
+.B vpg
+.B backup
+.I output-directory
+.RI [ options ]
+.br
+.B vpg
+.B restore
+.IR backup-directory | archive.tar.gz
+.RI [ options ]
+.br
+.B vpg
+.B verify
+.IR backup-directory | archive.tar.gz
+.br
+.B vpg
+.B list
+.RI [ backup-directory ]
+.br
+.B vpg
+.B help
+.RI [command]
+.br
+.B vpg
+.B version
+.SH DESCRIPTION
+.B vpg
+(Void PostgreSQL) is a secure backup and disaster-recovery CLI for
+PostgreSQL containers managed by Docker. It creates validated logical
+cluster backups with integrity checks, metadata manifests, optional
+compression, and guarded credential handling. Restoration performs a
+full-cluster replacement only after the backup has been verified.
+.PP
+.B vpg
+is intended for reliable backup, verification, and disaster-recovery
+workflows. It performs logical backups and is not a point-in-time recovery
+or physical replication solution.
+.PP
+Backups are written to a private incomplete directory and published only
+after dumps, structure, inventory, and checksums pass validation. Failed
+work is preserved for diagnosis and is never accepted by
+.B verify
+or
+.BR restore .
+.SH COMMANDS
+.TP
+.B backup
+Create and validate a full logical cluster backup of a running PostgreSQL
+container. Produces a backup directory and optionally a
+.B .tar.gz
+archive with a
+.B .sha256
+sidecar.
+.TP
+.B restore
+Replace a target container's PostgreSQL cluster from a completed VPG
+backup directory or archive. This is destructive: the target PGDATA
+contents are permanently deleted after confirmation.
+.TP
+.B verify
+Verify backup structure, file inventory, and SHA-256 checksums for a
+backup directory or archive. Archives are checked for unsafe paths and
+optional sidecar checksums before contents are validated.
+.TP
+.B list
+List complete VPG backups found in
+.I backup-directory
+(default: current directory). Incomplete or invalid backups are omitted.
+.TP
+.B help
+Show top-level help, or command-specific help when a command name is given.
+.TP
+.B version
+Print the installed VPG version.
+.SH BACKUP OPTIONS
+.TP
+.I output-directory
+Secure directory where backups will be stored. Created with mode
+.B 0700
+when missing. Must be owned by the current user and must not be writable
+by group or others unless
+.B \-\-allow\-insecure\-permissions
+is used.
+.TP
+.BI \-\-container " name"
+Running PostgreSQL Docker container name or ID.
+Default:
+.BR infra_postgres .
+A legacy positional form
+.BI "vpg backup " container " " output-directory
+is also accepted.
+.TP
+.BI \-\-env\-file " path"
+Load configuration from a dotenv file. Default:
+.B ./.env
+when it exists. Unless
+.B \-\-allow\-insecure\-permissions
+is set, the file must be owned by the current user and not accessible by
+group or others.
+.TP
+.BI \-\-username " username"
+Override
+.BR POSTGRES_USER .
+.TP
+.BI \-\-password " password"
+Override
+.BR POSTGRES_PASSWORD .
+This may expose the password through shell history or process arguments.
+Prefer
+.B \-\-password\-file
+or
+.BR \-\-password\-stdin .
+.TP
+.BI \-\-password\-file " path"
+Read the PostgreSQL password from a protected regular file owned by the
+current user with mode not accessible by group or others.
+.TP
+.B \-\-password\-stdin
+Read the PostgreSQL password from standard input.
+.TP
+.BI \-\-host " host"
+Override
+.BR POSTGRES_HOST .
+Default:
+.BR 127.0.0.1 .
+.TP
+.BI \-\-port " port"
+Override
+.BR POSTGRES_PORT .
+Default:
+.BR 5432 .
+.TP
+.BI \-\-maintenance\-db " database"
+Override
+.BR POSTGRES_DB .
+Default:
+.BR postgres .
+.TP
+.BI \-\-compression " 0\-9"
+PostgreSQL custom-format compression level.
+Default:
+.BR 6 .
+.TP
+.B \-\-archive
+Also create a
+.B .tar.gz
+archive. The backup directory remains available.
+.TP
+.B \-\-no\-archive
+Disable archive creation.
+.TP
+.B \-\-include\-role\-passwords
+Include PostgreSQL role password hashes in
+.BR globals.sql .
+Disabled by default. Treat such backups as secrets.
+.TP
+.B \-\-include\-tablespaces
+Include PostgreSQL tablespace definitions.
+Disabled by default.
+.TP
+.B \-\-verbose
+Enable verbose PostgreSQL backup output.
+.TP
+.B \-\-allow\-insecure\-permissions
+Allow group/other-readable env files and group/other-writable output
+directories. Prefer fixing permissions instead.
+.TP
+.BR \-h ", " \-\-help
+Show backup help.
+.SH RESTORE OPTIONS
+.TP
+.IR backup-directory | archive.tar.gz
+Completed VPG backup directory or archive produced by
+.BR "vpg backup" .
+.TP
+.BI \-\-container " name"
+Target PostgreSQL container.
+Default:
+.BR infra_postgres .
+.TP
+.BI \-\-timeout " seconds"
+Readiness timeout per startup phase.
+Default:
+.BR 240 .
+Maximum:
+.BR 3600 .
+.TP
+.B \-\-force
+Skip the interactive
+.B REPLACE
+confirmation. Required for non-interactive restores.
+.TP
+.B \-\-keep\-failed
+Keep the isolated restore container after failure for investigation.
+.TP
+.B \-\-verbose
+Enable verbose
+.B pg_restore
+output.
+.TP
+.BR \-h ", " \-\-help
+Show restore help.
+.SH CONFIGURATION
+Configuration precedence for
+.B backup
+is:
+.IP 1. 4
+CLI options
+.IP 2.
+Current process environment
+.IP 3.
+Dotenv file
+.IP 4.
+Built-in defaults
+.PP
+Supported dotenv and environment variables:
+.IP \[bu] 2
+.B POSTGRES_USER
+.IP \[bu]
+.B POSTGRES_PASSWORD
+.IP \[bu]
+.B POSTGRES_HOST
+.IP \[bu]
+.B POSTGRES_PORT
+.IP \[bu]
+.B POSTGRES_DB
+.IP \[bu]
+.B BACKUP_COMPRESSION
+.IP \[bu]
+.B BACKUP_CREATE_ARCHIVE
+.IP \[bu]
+.B BACKUP_INCLUDE_ROLE_PASSWORDS
+.IP \[bu]
+.B BACKUP_INCLUDE_TABLESPACES
+.SH BACKUP FORMAT
+Each completed backup directory contains:
+.IP \[bu] 2
+.B manifest.txt
+\- backup metadata and format version
+.IP \[bu]
+.B globals.sql
+\- roles and optionally tablespaces
+.IP \[bu]
+.B database\-map.tsv
+\- mapping from dump files to Base64 database names
+.IP \[bu]
+.B database_NNNN.dump
+\- one custom-format dump per database
+.IP \[bu]
+.B FILES.txt
+\- protected file inventory
+.IP \[bu]
+.B SHA256SUMS
+\- checksums for inventory files
+.IP \[bu]
+.B BACKUP_COMPLETE
+\- completion marker
+.PP
+With
+.BR \-\-archive ,
+.B vpg
+also creates
+.I backup-id\fB.tar.gz\fR
+and
+.IR backup-id\fB.tar.gz.sha256\fR .
+.SH RESTORE SAFETY
+Before changing the target,
+.B restore
+verifies the bundle format, completion state, inventory, checksums,
+database map entries, Docker access, target image, PGDATA path, and
+PostgreSQL major versions.
+.PP
+After confirmation,
+.B restore
+stops the target, clears its PGDATA volume, restores into a temporary
+container with networking disabled, verifies database count, then starts
+the original target container. If a failure occurs after PGDATA is cleared,
+the target remains stopped.
+.PP
+Restore supports the same or a newer PostgreSQL major version than the
+backup. Test major-version upgrades separately before relying on them in
+production.
+.SH EXAMPLES
+.TP
+Create a backup with archive:
+.nf
+vpg backup /srv/backups/postgres \\
+  \-\-container infra_postgres \\
+  \-\-archive
+.fi
+.TP
+List and verify backups:
+.nf
+vpg list /srv/backups/postgres
+vpg verify /srv/backups/postgres/postgres_cluster_2026\-08\-16_17\-30\-00_UTC_abcd1234
+vpg verify /srv/backups/postgres/postgres_cluster_2026\-08\-16_17\-30\-00_UTC_abcd1234.tar.gz
+.fi
+.TP
+Restore from an archive (interactive confirmation):
+.nf
+vpg restore /srv/backups/postgres/postgres_cluster_2026\-08\-16_17\-30\-00_UTC_abcd1234.tar.gz \\
+  \-\-container infra_postgres
+.fi
+.TP
+Non-interactive restore for automation:
+.nf
+vpg restore ./backup.tar.gz \\
+  \-\-container infra_postgres \\
+  \-\-force
+.fi
+.TP
+Backup using a password file:
+.nf
+vpg backup /srv/backups/postgres \\
+  \-\-container infra_postgres \\
+  \-\-username backup_user \\
+  \-\-password\-file /run/secrets/postgres_backup_password \\
+  \-\-archive
+.fi
+.SH EXIT STATUS
+.TP
+0
+Success.
+.TP
+1
+General failure (missing dependencies, validation failure, Docker error,
+restore failure, and similar).
+.TP
+2
+Invalid command-line usage.
+.TP
+130
+Interrupted by signal.
+.SH ENVIRONMENT
+.TP
+.B POSTGRES_USER
+PostgreSQL username used for backup connections.
+.TP
+.B POSTGRES_PASSWORD
+PostgreSQL password. Prefer
+.B \-\-password\-file
+or
+.B \-\-password\-stdin
+when possible.
+.TP
+.B POSTGRES_HOST
+Host used inside the container for backup connections.
+.TP
+.B POSTGRES_PORT
+Port used inside the container for backup connections.
+.TP
+.B POSTGRES_DB
+Maintenance database used for metadata queries.
+.TP
+.B BACKUP_COMPRESSION
+Default compression level for
+.BR backup .
+.TP
+.B BACKUP_CREATE_ARCHIVE
+Default archive creation setting
+.RB ( true / false ).
+.TP
+.B BACKUP_INCLUDE_ROLE_PASSWORDS
+Include role password hashes by default
+.RB ( true / false ).
+.TP
+.B BACKUP_INCLUDE_TABLESPACES
+Include tablespace definitions by default
+.RB ( true / false ).
+.SH FILES
+.TP
+.I ./.env
+Optional dotenv file loaded by
+.B backup
+when present.
+.TP
+.I PREFIX/bin/vpg
+Installed executable symlink.
+.TP
+.I PREFIX/lib/vpg/
+Installed VPG scripts.
+.TP
+.I PREFIX/share/man/man1/vpg.1
+Installed manual page.
+.SH REQUIREMENTS
+.IP \[bu] 2
+Linux with Bash 4.3 or newer
+.IP \[bu]
+Docker Engine and permission to manage the target container
+.IP \[bu]
+GNU core utilities:
+.BR awk (1),
+.BR base64 (1),
+.BR find (1),
+.BR sha256sum (1),
+.BR sort (1),
+.BR tar (1)
+.IP \[bu]
+A PostgreSQL-compatible container image providing
+.BR psql ,
+.BR pg_dump ,
+.BR pg_dumpall ,
+.BR pg_restore ,
+and
+.B pg_isready
+.SH AUTHOR
+Written by Mahros AL-Qabasy <mahros.elqabasy@gmail.com>.
+.br
+Project repository: <https://github.com/elqabasy/voidtools>.
+.SH SEE ALSO
+.BR docker (1),
+.BR pg_dump (1),
+.BR pg_dumpall (1),
+.BR pg_restore (1),
+.BR psql (1),
+.BR tar (1),
+.BR sha256sum (1)

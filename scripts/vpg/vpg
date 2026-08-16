@@ -4,7 +4,8 @@ IFS=$'\n\t'
 umask 077
 
 readonly VPG_VERSION="1.0.0"
-readonly VPG_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+# Resolve through symlinks so an installed PATH entry still finds src/.
+readonly VPG_ROOT="$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")"
 readonly BACKUP_COMMAND="${VPG_ROOT}/src/backup.sh"
 readonly RESTORE_COMMAND="${VPG_ROOT}/src/restore.sh"
 

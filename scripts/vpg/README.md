@@ -40,6 +40,12 @@ sudo ./install.sh
 vpg --help
 ```
 
+After install, read the manual page with:
+
+```bash
+man vpg
+```
+
 Use another prefix if needed:
 
 ```bash

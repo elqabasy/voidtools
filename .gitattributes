@@ -1,2 +1,3 @@
 scripts/vpg/**/*.sh text eol=lf
 scripts/vpg/vpg text eol=lf
+scripts/vpg/vpg.1 text eol=lf
