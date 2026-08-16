@@ -1,0 +1,636 @@
+.TH FORT 1 "August 2026" "Fort" "User Commands"
+
+.SH NAME
+fort \- securely bootstrap, harden, audit, and verify Linux servers
+
+.SH SYNOPSIS
+.B fort
+.RI [ global-options ]
+.I command
+.RI [ command-options ]
+
+.SH DESCRIPTION
+.B Fort
+is a Linux server security bootstrap and hardening utility designed for
+newly provisioned VPS, cloud, and dedicated servers.
+
+Fort automates common host-security tasks including SSH hardening,
+administrator provisioning, firewall configuration, brute-force
+protection, automatic security updates, kernel hardening, auditing,
+and post-hardening verification.
+
+Fort is designed to provide a secure baseline while minimizing the risk
+of administrator lockout.
+
+The primary target platforms are Debian and Ubuntu servers.
+
+.SH COMMANDS
+
+.TP
+.B fort harden
+Apply the Fort security baseline to the current server.
+
+This may configure SSH, firewall rules, Fail2Ban, automatic updates,
+kernel security settings, audit logging, and other supported controls.
+
+.TP
+.B fort audit
+Inspect the current server configuration without modifying it.
+
+Reports detected security weaknesses, exposed services, unsafe SSH
+configuration, firewall state, update configuration, and other host
+security findings.
+
+.TP
+.B fort verify
+Verify that the expected Fort security controls are active.
+
+Typical checks include:
+
+.RS
+.IP \(bu 2
+root SSH login disabled
+.IP \(bu 2
+password-based SSH authentication disabled
+.IP \(bu 2
+public-key authentication enabled
+.IP \(bu 2
+administrator account available
+.IP \(bu 2
+SSH configuration valid
+.IP \(bu 2
+firewall active
+.IP \(bu 2
+default inbound firewall policy restricted
+.IP \(bu 2
+Fail2Ban active
+.IP \(bu 2
+automatic security updates enabled
+.IP \(bu 2
+auditd active
+.IP \(bu 2
+kernel hardening settings loaded
+.IP \(bu 2
+unexpected listening services detected
+.RE
+
+.TP
+.B fort status
+Display a concise summary of the server security state.
+
+.TP
+.B fort doctor
+Perform diagnostic checks for Fort itself and the underlying operating
+system.
+
+This command can be used to detect unsupported environments, missing
+packages, invalid configuration, or services that prevent Fort from
+operating correctly.
+
+.SH OPTIONS
+
+.TP
+.BR \-h ", " \-\-help
+Display command help.
+
+.TP
+.BR \-V ", " \-\-version
+Display the installed Fort version.
+
+.TP
+.BR \-v ", " \-\-verbose
+Enable additional diagnostic output.
+
+.TP
+.BR \-q ", " \-\-quiet
+Suppress non-essential output.
+
+.TP
+.BR \-\-dry\-run
+Show intended changes without applying them.
+
+.TP
+.BR \-\-yes
+Automatically accept supported non-critical confirmation prompts.
+
+Use this option carefully on remote systems.
+
+.SH HARDEN OPTIONS
+
+The following options may be available with
+.BR "fort harden" .
+
+.TP
+.BI \-\-admin " USER"
+Set the administrative Linux account that should retain SSH and sudo
+access.
+
+Example:
+
+.RS
+.nf
+fort harden --admin mahros
+.fi
+.RE
+
+.TP
+.BI \-\-ssh\-key " KEY"
+Install the specified SSH public key for the administrator.
+
+An Ed25519 key is recommended for normal deployments.
+
+.TP
+.BI \-\-ssh\-key\-file " FILE"
+Read the administrator SSH public key from
+.IR FILE .
+
+Example:
+
+.RS
+.nf
+fort harden --admin mahros \\
+    --ssh-key-file ~/.ssh/id_ed25519.pub
+.fi
+.RE
+
+.TP
+.BI \-\-ssh\-port " PORT"
+Configure the SSH daemon to listen on
+.IR PORT .
+
+The default SSH port is 22.
+
+Changing the SSH port should not be treated as a replacement for strong
+authentication.
+
+.TP
+.B \-\-allow\-http
+Permit inbound TCP port 80 through the host firewall.
+
+.TP
+.B \-\-allow\-https
+Permit inbound TCP port 443 through the host firewall.
+
+.TP
+.B \-\-no\-http
+Do not permit inbound HTTP traffic.
+
+.TP
+.B \-\-no\-https
+Do not permit inbound HTTPS traffic.
+
+.TP
+.B \-\-allow\-ssh\-forwarding
+Permit SSH TCP forwarding.
+
+This should only be enabled when SSH tunnels are required.
+
+.TP
+.B \-\-allow\-agent\-forwarding
+Permit SSH agent forwarding.
+
+Agent forwarding should remain disabled unless explicitly required.
+
+.SH SSH HARDENING
+
+Fort may apply the following OpenSSH security controls:
+
+.RS
+.IP \(bu 2
+disable remote root login
+.IP \(bu 2
+disable password authentication
+.IP \(bu 2
+disable keyboard-interactive authentication
+.IP \(bu 2
+require public-key authentication
+.IP \(bu 2
+reject empty passwords
+.IP \(bu 2
+restrict SSH access to authorized administrator accounts
+.IP \(bu 2
+reduce permitted authentication attempts
+.IP \(bu 2
+reduce login grace time
+.IP \(bu 2
+disable X11 forwarding
+.IP \(bu 2
+disable SSH tunneling where not explicitly required
+.IP \(bu 2
+disable SSH agent forwarding where not explicitly required
+.IP \(bu 2
+increase SSH security logging
+.RE
+
+Before activating a modified SSH configuration, Fort should validate the
+configuration using the installed SSH daemon.
+
+Fort should not intentionally reload an invalid SSH configuration.
+
+.SH FIREWALL
+
+Fort uses the native Linux packet filtering facilities supported by the
+target operating system.
+
+On supported Debian systems, nftables is preferred.
+
+The default server policy is intended to follow a deny-by-default model
+for unsolicited inbound traffic while allowing established connections
+and explicitly permitted services.
+
+A typical web server configuration exposes only:
+
+.RS
+.nf
+22/tcp     SSH
+80/tcp     HTTP
+443/tcp    HTTPS
+.fi
+.RE
+
+Applications such as PostgreSQL, Redis, MinIO, administrative panels,
+and internal application ports should normally not be exposed directly
+to the public Internet.
+
+.SH DOCKER
+
+Fort does not assume that host firewall rules alone completely define
+the attack surface of Docker workloads.
+
+Container runtimes may create their own packet-filtering and port
+forwarding rules.
+
+Operators should inspect Docker port publishing separately.
+
+For internal-only services, avoid configurations such as:
+
+.RS
+.nf
+ports:
+  - "5432:5432"
+.fi
+.RE
+
+when PostgreSQL is not intended to be publicly accessible.
+
+Where host access is required but public access is not, binding to
+loopback may be appropriate:
+
+.RS
+.nf
+ports:
+  - "127.0.0.1:5432:5432"
+.fi
+.RE
+
+.SH FAIL2BAN
+
+Fort may configure Fail2Ban to detect repeated SSH authentication
+failures and temporarily block abusive sources.
+
+Fail2Ban is considered an additional defense and not a replacement for
+public-key authentication or firewall controls.
+
+.SH AUTOMATIC UPDATES
+
+Fort may configure unattended security updates using the operating
+system package manager.
+
+On Debian and Ubuntu, this normally uses
+.BR unattended-upgrades .
+
+Operators should still monitor reboot requirements and application
+compatibility after security updates.
+
+.SH KERNEL HARDENING
+
+Fort applies conservative kernel and network security settings intended
+to reduce unnecessary attack surface without intentionally breaking
+normal VPS workloads.
+
+Controls may include:
+
+.RS
+.IP \(bu 2
+disable ICMP redirects
+.IP \(bu 2
+disable source-routed packets
+.IP \(bu 2
+enable TCP SYN cookies
+.IP \(bu 2
+restrict kernel pointer exposure
+.IP \(bu 2
+restrict unprivileged access to kernel logs
+.IP \(bu 2
+restrict ptrace behavior
+.IP \(bu 2
+enable protected symbolic-link and hard-link behavior
+.RE
+
+Fort intentionally avoids blindly applying every available sysctl
+hardening recommendation.
+
+Some settings may conflict with container networking, routing,
+virtualization, debugging, or application requirements.
+
+.SH AUDITING
+
+Fort may install and enable the Linux Audit subsystem using
+.BR auditd .
+
+Fort can monitor changes to security-sensitive resources including:
+
+.RS
+.IP \(bu 2
+/etc/passwd
+.IP \(bu 2
+/etc/group
+.IP \(bu 2
+/etc/shadow
+.IP \(bu 2
+/etc/sudoers
+.IP \(bu 2
+/etc/sudoers.d/
+.IP \(bu 2
+/etc/ssh/
+.IP \(bu 2
+system network configuration
+.IP \(bu 2
+scheduled-task configuration
+.RE
+
+.SH BACKUPS
+
+Before replacing supported configuration files, Fort should create
+backup copies where practical.
+
+Backups must be protected from unprivileged users.
+
+The exact backup location may vary by Fort version.
+
+.SH LOCKOUT PROTECTION
+
+Fort is intended to avoid common remote-server lockout conditions.
+
+Before disabling root or password-based SSH access, Fort should verify
+that:
+
+.RS
+.IP 1. 3
+the administrative account exists;
+.IP 2. 3
+the account has an authorized SSH public key;
+.IP 3. 3
+the SSH configuration is syntactically valid;
+.IP 4. 3
+the SSH port remains permitted through the firewall.
+.RE
+
+Even with these protections, administrators are strongly advised to
+keep their existing SSH session open while testing a second SSH login.
+
+Example:
+
+.RS
+.nf
+ssh mahros@203.0.113.10
+.fi
+.RE
+
+After login, verify privilege escalation:
+
+.RS
+.nf
+sudo whoami
+.fi
+.RE
+
+Expected output:
+
+.RS
+.nf
+root
+.fi
+.RE
+
+Only after successful verification should the original administrative
+session be closed.
+
+.SH ENVIRONMENT
+
+Fort may recognize the following environment variables.
+
+.TP
+.B ADMIN_USER
+Default administrator account.
+
+.TP
+.B SSH_PUBLIC_KEY
+Public key to install for the administrator.
+
+.TP
+.B SSH_PORT
+SSH listening port.
+
+.TP
+.B ALLOW_HTTP
+Permit inbound HTTP when set to a supported true value.
+
+.TP
+.B ALLOW_HTTPS
+Permit inbound HTTPS when set to a supported true value.
+
+.TP
+.B ALLOW_SSH_TCP_FORWARDING
+Control SSH TCP forwarding.
+
+.TP
+.B ALLOW_SSH_AGENT_FORWARDING
+Control SSH agent forwarding.
+
+Command-line options should take precedence over equivalent environment
+variables.
+
+.SH EXAMPLES
+
+Create a secure administrator and harden a new server:
+
+.RS
+.nf
+fort harden \\
+    --admin mahros \\
+    --ssh-key-file ~/.ssh/id_ed25519.pub
+.fi
+.RE
+
+.PP
+Harden a web server:
+
+.RS
+.nf
+fort harden \\
+    --admin mahros \\
+    --ssh-key-file ~/.ssh/id_ed25519.pub \\
+    --allow-http \\
+    --allow-https
+.fi
+.RE
+
+.PP
+Inspect a server without changing it:
+
+.RS
+.nf
+fort audit
+.fi
+.RE
+
+.PP
+Verify security controls:
+
+.RS
+.nf
+fort verify
+.fi
+.RE
+
+.PP
+Display current security state:
+
+.RS
+.nf
+fort status
+.fi
+.RE
+
+.PP
+Preview changes:
+
+.RS
+.nf
+fort harden --dry-run
+.fi
+.RE
+
+.SH EXIT STATUS
+
+.TP
+.B 0
+Operation completed successfully.
+
+.TP
+.B 1
+General error or failed security check.
+
+.TP
+.B 2
+Invalid command-line usage.
+
+.TP
+.B 3
+Unsupported operating system or environment.
+
+.TP
+.B 4
+Security configuration validation failed.
+
+.TP
+.B 5
+Operation aborted to prevent possible administrator lockout.
+
+Additional exit codes may be introduced in future releases.
+
+.SH FILES
+
+.TP
+.I /etc/ssh/sshd_config
+Primary OpenSSH server configuration.
+
+.TP
+.I /etc/ssh/sshd_config.d/
+OpenSSH configuration fragments.
+
+.TP
+.I /etc/nftables.conf
+Primary nftables configuration on supported systems.
+
+.TP
+.I /etc/fail2ban/
+Fail2Ban configuration.
+
+.TP
+.I /etc/sysctl.d/
+Persistent kernel parameter configuration.
+
+.TP
+.I /etc/audit/
+Linux Audit configuration.
+
+.TP
+.I /var/log/journal/
+Persistent systemd journal storage when enabled.
+
+.SH SECURITY CONSIDERATIONS
+
+Fort provides a security baseline, not an absolute security guarantee.
+
+Host hardening does not replace:
+
+.RS
+.IP \(bu 2
+application security
+.IP \(bu 2
+dependency management
+.IP \(bu 2
+container security
+.IP \(bu 2
+secret management
+.IP \(bu 2
+network architecture
+.IP \(bu 2
+off-site backups
+.IP \(bu 2
+monitoring and incident response
+.IP \(bu 2
+regular vulnerability management
+.RE
+
+Operators should expose only services that are explicitly required.
+
+Administrative services and databases should normally remain on private
+networks, container networks, loopback interfaces, or authenticated
+VPNs.
+
+.SH NOTES
+
+Fort favors security controls with a favorable security-to-compatibility
+tradeoff.
+
+It intentionally avoids applying obscure or highly disruptive hardening
+settings merely to increase the number of enabled controls.
+
+The desired result is a hardened server that remains operational,
+observable, maintainable, and recoverable.
+
+.SH BUGS
+
+Report security-sensitive vulnerabilities privately rather than through
+public issue trackers when a private reporting mechanism is available.
+
+.SH SEE ALSO
+.BR sshd_config (5),
+.BR ssh (1),
+.BR nft (8),
+.BR nftables (8),
+.BR fail2ban-client (1),
+.BR auditd (8),
+.BR auditctl (8),
+.BR sysctl (8)
+
+.SH AUTHOR
+Fort contributors.
+
+.SH COPYRIGHT
+Copyright \(co 2026 Fort contributors.
+
+License information is distributed with the Fort source code.
