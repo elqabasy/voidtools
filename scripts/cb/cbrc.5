@@ -1,4 +1,4 @@
-.TH CBRC 5 "August 2025" "cb 1.0" "File Formats"
+.TH CBRC 5 "August 2026" "cb 2.0" "File Formats"
 .SH NAME
 cbrc \- configuration file for cb clipboard utility
 .SH SYNOPSIS
@@ -12,13 +12,18 @@ utility reads configuration settings from
 .I /etc/cbrc
 (system-wide defaults) and
 .I ~/.cbrc
-(user-specific overrides).  
+(user-specific overrides).
 If
 .I ~/.cbrc
 does not exist, it is silently created with safe defaults.
 
 The configuration file uses a simple KEY=VALUE format, one setting per line.
 Lines beginning with \fB#\fR are treated as comments and ignored.
+
+Configuration files are shell-sourced by
+.BR cb (1).
+They can execute arbitrary shell code when loaded. Restrict file permissions
+and treat them as trusted input.
 
 .SH VARIABLES
 The following variables are recognized:
@@ -28,27 +33,36 @@ The following variables are recognized:
 Clipboard mode. Reserved for future extensions. Default: \fBclipboard\fR.
 .TP
 .B DIR
-Whether to include files from directories by default.  
-Values: \fBtrue\fR or \fBfalse\fR.  
+Whether to include files from directories by default.
+Values: \fBtrue\fR or \fBfalse\fR.
 Default: \fBfalse\fR.
 .TP
 .B RECURSIVE
-Whether to scan directories recursively when \fB-d\fR is used.  
-Values: \fBtrue\fR or \fBfalse\fR.  
+Whether to scan directories recursively when \fB-d\fR is used.
+Values: \fBtrue\fR or \fBfalse\fR.
 Default: \fBfalse\fR.
 .TP
 .B INCLUDE_DIRS
-Whether to include directory names themselves as plain text.  
-Values: \fBtrue\fR or \fBfalse\fR.  
+Whether to include directory names themselves as plain text.
+Values: \fBtrue\fR or \fBfalse\fR.
 Default: \fBfalse\fR.
 .TP
 .B MAX_SIZE
-Maximum total allowed size of all copied data.  
-Examples: \fB1MB\fR, \fB500KB\fR, \fB0\fR (disables safety limit).  
+Maximum total allowed size of all copied data.
+Examples: \fB1MB\fR, \fB500KB\fR, \fB0\fR (disables safety limit).
 Default: \fB1MB\fR.
 .TP
+.B BACKEND
+Default clipboard backend.
+Values: \fBauto\fR, \fBpbcopy\fR, \fBwl-copy\fR, \fBxsel\fR, \fBxclip\fR, \fBosc52\fR.
+Default: \fBauto\fR.
+.TP
+.B OSC52_MAX_SIZE
+Maximum payload size in bytes for OSC 52 terminal clipboard transfers.
+Default: \fB1048576\fR (1MB). Many terminals enforce smaller limits.
+.TP
 .B EXCLUDES
-A space-separated list of glob patterns to ignore.  
+A space-separated list of glob patterns to ignore.
 Defaults include:
 \fB*.log *.tmp *.bak node_modules/ build/ dist/ __pycache__/\fR
 
@@ -56,13 +70,22 @@ Defaults include:
 A minimal \fB~/.cbrc\fR:
 
 .EX
-# ~/.cbrc — User defaults for cb.sh
+# ~/.cbrc — User defaults for cb
 MODE=clipboard
 DIR=false
 RECURSIVE=false
 INCLUDE_DIRS=false
 MAX_SIZE=2MB
+BACKEND=auto
+OSC52_MAX_SIZE=1048576
 EXCLUDES=*.log *.tmp node_modules/ build/ dist/
+.EE
+
+Prefer OSC 52 over SSH:
+
+.EX
+BACKEND=osc52
+OSC52_MAX_SIZE=524288
 .EE
 
 .SH FILES
@@ -75,8 +98,11 @@ User-specific overrides, created silently if missing.
 
 .SH SEE ALSO
 .BR cb (1),
-.BR xsel (1)
+.BR pbcopy (1),
+.BR wl-copy (1),
+.BR xsel (1),
+.BR xclip (1)
 
 .SH AUTHOR
-Written by Mahros AL-Qabasy <mahros.elqabasy@gmail.com>.  
+Written by Mahros AL-Qabasy <mahros.elqabasy@gmail.com>.
 Project repository: <https://github.com/elqabasy/voidtools>.
