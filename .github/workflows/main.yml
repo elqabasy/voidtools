@@ -50,6 +50,7 @@ jobs:
 
           # Compile single-file tools. Only scripts/<tool>/<tool>.sh is an
           # entrypoint; helper scripts, installers, and tests are skipped.
+          # Multi-file CLIs (cb, vpg) are installed separately below.
           for script in scripts/*/*.sh; do
             tool="$(basename "$script" .sh)"
 
@@ -58,11 +59,22 @@ jobs:
               continue
             fi
 
+            if [ "$tool" = "cb" ] || [ "$tool" = "vpg" ]; then
+              echo "Skipping multi-file CLI (installed separately): $script"
+              continue
+            fi
+
             echo "Compiling $script"
             cp "$script" "$BUILD_DIR/$tool.sh"
             shc -f "$BUILD_DIR/$tool.sh" -o "pkg/usr/bin/$tool" -r
             chmod 0755 "pkg/usr/bin/$tool"
           done
+
+          # cb is a multi-file CLI: ship its library layout and link the
+          # entrypoint into PATH.
+          install -D -m 0755 scripts/cb/cb.sh pkg/usr/lib/cb/cb.sh
+          install -D -m 0755 scripts/cb/lib/clipboard.sh pkg/usr/lib/cb/lib/clipboard.sh
+          ln -sfn ../lib/cb/cb.sh pkg/usr/bin/cb
 
           # vpg is a multi-file CLI: ship its library layout and link the
           # entrypoint into PATH the same way scripts/vpg/install.sh does.

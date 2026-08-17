@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 #
 # cb — Copy text, file contents, or piped input to the clipboard
 #       with safe limits, cross-platform backends, and professional logging.
@@ -6,7 +6,7 @@
 set -o pipefail
 
 # ========= Locate library =========
-CB_SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+CB_SCRIPT_DIR="$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")"
 # shellcheck source=lib/clipboard.sh
 source "${CB_SCRIPT_DIR}/lib/clipboard.sh"
 
